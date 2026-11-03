@@ -2,5 +2,9 @@
 // jsonwebtoken and its buffer-equal-constant-time dependency need it.
 import * as buffer from 'buffer';
 if (!buffer.SlowBuffer) {
-  (buffer as any).SlowBuffer = buffer.Buffer;
+  Object.defineProperty(buffer, 'SlowBuffer', {
+    value: buffer.Buffer,
+    writable: true,
+    configurable: true,
+  });
 }
