@@ -24,7 +24,7 @@
     "typescript": "4.9.5"
   },
   "engines": {
-    "node": ">=24.x",
-    "note": "Pinned to Node 24 LTS for Vercel services compatibility."
+    "node": "24.x",
+    "note": "Pinned to Node 24 for Vercel services compatibility."
   }
 }
