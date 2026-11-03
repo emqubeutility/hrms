@@ -42,6 +42,7 @@ export function redact(value: any): any {
   return value;
 }
 
+const isVercel = !!process.env.VERCEL;
 const logDir = process.env.LOG_DIR || './logs';
 
 function buildPrintFormat() {
@@ -97,23 +98,25 @@ function createFileTransport(level?: string): DailyRotateFile {
   return transport;
 }
 
+const transports: winston.transport[] = [
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+      winston.format.errors({ stack: true }),
+      buildPrintFormat(),
+    ),
+  }),
+];
+
+if (!isVercel && logDir) {
+  transports.push(createFileTransport('error'), createFileTransport());
+}
+
 const winstonLogger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   exitOnError: false,
-  transports: [createFileTransport('error'), createFileTransport()],
+  transports,
 });
-
-if (process.env.NODE_ENV !== 'production') {
-  winstonLogger.add(
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        winston.format.errors({ stack: true }),
-        buildPrintFormat(),
-      ),
-    }),
-  );
-}
 
 process.on('uncaughtException', (err) => {
   try {
