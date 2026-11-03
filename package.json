@@ -4,6 +4,7 @@
   "private": true,
   "description": "HRMS modernization — NestJS + Prisma + PostgreSQL (phase-2 scaffold; legacy repo remains a read-only reference)",
   "scripts": {
+    "postinstall": "prisma generate",
     "prebuild": "rimraf dist",
     "build": "nest build",
     "start": "nest start",
