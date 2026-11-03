@@ -24,7 +24,7 @@
     "typescript": "4.9.5"
   },
   "engines": {
-    "node": ">=14.17.0",
-    "note": "Production target is Node 18/20 LTS + Next.js 14+; Node 14 is only for this local scaffold."
+    "node": "18.x",
+    "note": "Pinned to Node 18 LTS for Vercel services compatibility."
   }
 }

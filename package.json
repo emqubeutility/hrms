@@ -60,8 +60,8 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "engines": {
-    "node": ">=14.17.0",
-    "note": "Production target is Node 18/20 LTS; Node 14 is only for this local scaffold."
+    "node": "18.x",
+    "note": "Pinned to Node 18 LTS for Vercel services compatibility."
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
