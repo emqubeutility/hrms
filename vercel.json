@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "build": {
     "env": {
-      "NODE_VERSION": "18.20.5"
+      "NODE_VERSION": "24.19.0"
     }
   },
   "services": {
