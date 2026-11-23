@@ -1,4 +1,4 @@
-import { request } from './api';
+import { API_BASE_URL, getAccessToken, request } from './api';
 
 export interface LeaveType {
   id: number;
@@ -29,6 +29,9 @@ export interface LeaveType {
   payPercent: number;
   /** Leave type ids whose balance must be used up before this one is available. */
   unlockAfterTypeIds: number[];
+  /** Choices offered when applying (for example the relationship), each with its longest leave. */
+  variants: { label: string; maxDays: number }[];
+  variantLabel: string | null;
   /** Month (1-12) this type's calendar starts in; null = the company leave year. */
   calendarStartMonth: number | null;
   isCompOff: boolean;
@@ -105,6 +108,10 @@ export interface LeaveApplication {
   decisionNote: string | null;
   createdAt: string;
   calculation: CalcDay[];
+  /** A supporting document (for example a medical certificate) is attached. */
+  variant: string | null;
+  hasAttachment: boolean;
+  attachmentName: string | null;
 }
 
 export interface LedgerRow {
@@ -122,6 +129,7 @@ export interface LeaveRequestPayload {
   toDate: string;
   halfDayPart?: 'FIRST' | 'SECOND';
   eventDate?: string;
+  variant?: string;
   reason?: string;
 }
 
@@ -202,3 +210,18 @@ export const REASON_TEXT: Record<CalcDay['reason'], string> = {
   SANDWICH_WEEKLY_OFF: 'Weekly off counted (sandwich)',
   SANDWICH_HOLIDAY: 'Holiday counted (sandwich)',
 };
+
+/** Attach (or replace) the supporting document of a leave that is waiting for a decision. PDF, JPG or PNG, up to 10 MB. */
+export function uploadLeaveDocument(id: number, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return request<{ name: string }>(`/leave/applications/${id}/attachment`, { method: 'POST', body: form });
+}
+
+/** Opens the supporting document in a new tab (it needs the access token, so it is fetched first). */
+export async function openLeaveDocument(id: number) {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/leave/applications/${id}/attachment`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
+  if (!res.ok) throw new Error('Could not open the document');
+  window.open(URL.createObjectURL(await res.blob()), '_blank');
+}

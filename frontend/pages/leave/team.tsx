@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import Select from '../../components/Select';
 import CompOffList from '../../components/leave/CompOffList';
-import { LeaveApplication, REASON_TEXT, decideLeave, getLeaveCalendar, getTeamLeave } from '../../lib/leave-api';
+import { LeaveApplication, REASON_TEXT, decideLeave, getLeaveCalendar, getTeamLeave, openLeaveDocument } from '../../lib/leave-api';
 
 type Tab = 'waiting' | 'calendar' | 'compoff';
 
@@ -111,6 +111,7 @@ export default function TeamLeavePage() {
                   <p className="text-sm font-semibold text-gray-900">{a.employeeName} <span className="text-xs font-normal text-gray-400">{a.employeeCode}</span></p>
                   <p className="mt-0.5 text-sm text-gray-700">{a.leaveType.name}: <span className="font-mono">{a.fromDate}{a.toDate !== a.fromDate ? ` to ${a.toDate}` : ''}</span>, <b>{a.totalDays}</b> day{a.totalDays === 1 ? '' : 's'}{a.sandwichDays > 0 && <span className="ml-1 text-purple-700">({a.sandwichDays} counted by the sandwich rule)</span>}</p>
                   {a.reason && <p className="mt-1 text-sm text-gray-600">{a.reason}</p>}
+                  {a.hasAttachment && <button type="button" onClick={() => openLeaveDocument(a.id).catch(() => undefined)} className="mt-1 text-sm font-medium text-blue-600 hover:text-blue-800">View document ({a.attachmentName})</button>}
                   <button type="button" onClick={() => setOpen(open === a.id ? null : a.id)} className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800">{open === a.id ? 'Hide' : 'Show'} how the days were counted</button>
                   {open === a.id && (
                     <table className="mt-2 text-sm">

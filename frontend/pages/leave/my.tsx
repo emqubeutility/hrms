@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
+import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, openLeaveDocument, uploadLeaveDocument, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
 import Select from '../../components/Select';
 import Modal from '../../components/Modal';
@@ -20,12 +20,13 @@ export default function MyLeavePage() {
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [apps, setApps] = useState<LeaveApplication[]>([]);
-  const [form, setForm] = useState({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '' as '' | 'FIRST' | 'SECOND', reason: '', eventDate: '' });
+  const [form, setForm] = useState({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '' as '' | 'FIRST' | 'SECOND', reason: '', eventDate: '', variant: '' });
   const [preview, setPreview] = useState<LeavePreview | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [applying, setApplying] = useState(false);
   const [filters, setFilters] = useState({ status: '', leaveTypeId: '', from: '', to: '' });
   const filtered = Object.values(filters).some(Boolean);
@@ -51,6 +52,7 @@ export default function MyLeavePage() {
 
   const type = types.find((t) => String(t.id) === form.leaveTypeId);
   const single = form.fromDate === form.toDate;
+  const docNeeded = !!type?.requiresDocument && !!preview && preview.totalDays > (type?.documentAfterDays ?? 0);
 
   // Live count of the days: weekly offs, holidays and the sandwich rule are worked out on the server.
   useEffect(() => {
@@ -58,28 +60,38 @@ export default function MyLeavePage() {
     setPreviewError('');
     if (!form.leaveTypeId || !form.fromDate || !form.toDate || form.toDate < form.fromDate) return;
     const t = setTimeout(() => {
-      previewLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined })
+      previewLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined, variant: form.variant || undefined })
         .then((r) => setPreview(r.data))
         .catch((e) => setPreviewError(e.message || 'Could not work out the days'));
     }, 350);
     return () => clearTimeout(t);
-  }, [form.leaveTypeId, form.fromDate, form.toDate, form.half, form.eventDate, single]);
+  }, [form.leaveTypeId, form.fromDate, form.toDate, form.half, form.eventDate, form.variant, single]);
 
   const openApply = () => {
     setError('');
     setNotice('');
     setPreview(null);
     setPreviewError('');
-    setForm({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '', reason: '', eventDate: '' });
+    setForm({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '', reason: '', eventDate: '', variant: '' });
+    setDocFile(null);
     setApplying(true);
   };
 
   const submit = async () => {
+    // A leave type that needs a document must have one when the leave is longer than its limit.
+    if (docNeeded && !docFile) return setError(`${type?.name} needs a supporting document. Choose the file to attach.`);
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      await applyLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined, reason: form.reason.trim() || undefined });
+      const made = await applyLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined, variant: form.variant || undefined, reason: form.reason.trim() || undefined });
+      if (docFile) {
+        try {
+          await uploadLeaveDocument(made.data.id, docFile);
+        } catch (e: any) {
+          setError(`The leave was sent but the document was not attached: ${e.message || 'upload failed'}. Attach it from the list below.`);
+        }
+      }
       setNotice('Leave sent for approval');
       setApplying(false);
       await reload();
@@ -151,6 +163,14 @@ export default function MyLeavePage() {
             <label className="block text-sm font-medium text-gray-700">From<input type="date" className={fieldClass} value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value, toDate: form.toDate < e.target.value ? e.target.value : form.toDate })} /></label>
             <label className="block text-sm font-medium text-gray-700">To<input type="date" min={form.fromDate} className={fieldClass} value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} /></label>
           </div>
+          {type?.variants?.length ? (
+            <label className="block text-sm font-medium text-gray-700">{type.variantLabel || 'Choose one'}
+              <Select className={fieldClass} value={form.variant} onChange={(e) => setForm({ ...form, variant: e.target.value })}>
+                <option value="">Choose…</option>
+                {type.variants.map((v) => <option key={v.label} value={v.label}>{v.label} (up to {v.maxDays} days)</option>)}
+              </Select>
+            </label>
+          ) : null}
           {type?.eventWindowMonths ? (
             <label className="block text-sm font-medium text-gray-700">{type.eventLabel || 'Event date'}<input type="date" className={fieldClass} value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} />
               <span className="mt-1 block text-xs text-gray-500">The leave must be taken within {type.eventWindowMonths} months of this date.</span>
@@ -163,6 +183,12 @@ export default function MyLeavePage() {
               </Select>
             </label>
           )}
+          {type?.requiresDocument ? (
+            <label className="block text-sm font-medium text-gray-700">Supporting document{docNeeded ? ' (required)' : ' (optional for this length)'}
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" className={fieldClass} onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} />
+              <span className="mt-1 block text-xs text-gray-500">PDF, JPG or PNG, up to 10 MB (for example the medical certificate).</span>
+            </label>
+          ) : null}
           <label className="block text-sm font-medium text-gray-700">Reason
             <textarea rows={2} maxLength={300} className={fieldClass} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
           </label>
@@ -236,12 +262,12 @@ export default function MyLeavePage() {
             ) : (
               apps.map((a) => (
                 <tr key={a.id}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{a.leaveType.name}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{a.leaveType.name}{a.variant && <span className="block text-xs font-normal text-gray-500">{a.variant}</span>}</td>
                   <td className="px-4 py-3 font-mono text-[13px] text-gray-700">{a.fromDate}{a.toDate !== a.fromDate ? ` to ${a.toDate}` : a.halfDayPart ? ` (${a.halfDayPart.toLowerCase()} half)` : ''}</td>
                   <td className="px-4 py-3 text-gray-700">{a.totalDays}{a.sandwichDays > 0 && <span className="ml-1 text-xs text-purple-700">incl. {a.sandwichDays} sandwich</span>}</td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[a.status]}`}>{a.status.charAt(0) + a.status.slice(1).toLowerCase()}</span></td>
                   <td className="max-w-xs truncate px-4 py-3 text-xs text-gray-500" title={`${a.reason ?? ''} ${a.decisionNote ?? ''}`}>{a.decisionNote || a.reason}</td>
-                  <td className="px-4 py-3 text-right">{(a.status === 'PENDING' || (a.status === 'APPROVED' && a.fromDate > today())) && <button type="button" onClick={() => cancel(a)} className="text-xs font-medium text-red-600 hover:text-red-800">Cancel</button>}</td>
+                  <td className="px-4 py-3 text-right">{a.hasAttachment && <button type="button" onClick={() => openLeaveDocument(a.id).catch((e) => setError(e.message))} className="mr-3 text-xs font-medium text-blue-600 hover:text-blue-800">Document</button>}{a.status === 'PENDING' && !a.hasAttachment && a.leaveType && types.find((t) => t.id === a.leaveType.id)?.requiresDocument && <label className="mr-3 cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-800">Attach document<input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLeaveDocument(a.id, f).then(reload).catch((er) => setError(er.message)); }} /></label>}{(a.status === 'PENDING' || (a.status === 'APPROVED' && a.fromDate > today())) && <button type="button" onClick={() => cancel(a)} className="text-xs font-medium text-red-600 hover:text-red-800">Cancel</button>}</td>
                 </tr>
               ))
             )}

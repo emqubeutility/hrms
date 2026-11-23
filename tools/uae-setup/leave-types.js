@@ -30,8 +30,8 @@ const TYPES = [
   T('STUDY', 'Study Leave', { annualDays: 10 }),
   T('HAJJ', 'Hajj Leave Unpaid', { ...LOP, maxDaysPerRequest: 30 }),
   T('UMRAH', 'Umrah Leave Unpaid', { ...LOP }),
-  T('BRV-SPOUSE', 'Bereavement Leave (Spouse)', { annualDays: 5 }),
-  T('BRV-FAMILY', 'Bereavement Leave (Parent, Child, Sibling, Grandparent)', { annualDays: 3 }),
+  // One type; the employee picks the relationship and each choice has its own longest leave.
+  T('BRV', 'Bereavement Leave', { balanceTracking: false, allowHalfDay: false }),
   T('COMPOFF', 'Comp Off', { isCompOff: true, allowHalfDay: true }),
 ];
 // Conditions and share of pay, by code.
@@ -40,14 +40,13 @@ const EXTRA = {
   'MAT-SICK-PAID': { genderRestriction: 'Female' }, 'MAT-SICK-UNPAID': { genderRestriction: 'Female' },
   PAR: { eventWindowMonths: 6, eventLabel: "Child's date of birth" },
   HAJJ: { maxTimesInService: 1 },
+  BRV: { variantLabel: 'Relationship', variants: [{ label: 'Spouse', maxDays: 5 }, { label: 'Parent, child, sibling, grandchild or grandparent', maxDays: 3 }] },
   'ML-HALF': { payPercent: 50 },
 };
 // Policy rule per type: how it is credited.
 const RULES = {
   AL: { serviceBasis: 'REJOINING_DATE', creditMethod: 'MONTHLY', annualDays: 30, slabTiming: 'IMMEDIATE', proration: 'EXACT_DAYS', formula: 'workdays * annualDays / yearDays', slabs: [{ fromMonths: 0, toMonths: 6, annualDays: 0 }, { fromMonths: 6, toMonths: 12, annualDays: 24 }, { fromMonths: 12, toMonths: null, annualDays: 30 }] },
   STUDY: { creditMethod: 'UPFRONT', annualDays: 10, slabTiming: 'IMMEDIATE', proration: 'NONE', slabs: [{ fromMonths: 0, toMonths: 24, annualDays: 0 }, { fromMonths: 24, toMonths: null, annualDays: 10 }] },
-  'BRV-SPOUSE': { creditMethod: 'UPFRONT', annualDays: 5, proration: 'NONE' },
-  'BRV-FAMILY': { creditMethod: 'UPFRONT', annualDays: 3, proration: 'NONE' },
   'ML-CERT': { creditMethod: 'UPFRONT', annualDays: 8, proration: 'NONE' },
   'ML-NOCERT': { creditMethod: 'UPFRONT', annualDays: 7, proration: 'NONE' },
   'ML-HALF': { creditMethod: 'UPFRONT', annualDays: 30, proration: 'NONE' },
@@ -62,6 +61,17 @@ const RULES = {
   const { PrismaService } = require(path.join(process.cwd(), 'dist/prisma/prisma.service'));
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
   const p = app.get(PrismaService);
+  // The two earlier bereavement types become one (removed only if nobody has used them).
+  for (const code of ['BRV-SPOUSE', 'BRV-FAMILY']) {
+    const old = await p.leaveType.findUnique({ where: { code } });
+    if (!old) continue;
+    const used = (await p.leaveApplication.count({ where: { leaveTypeId: old.id } })) + (await p.leaveCredit.count({ where: { leaveTypeId: old.id } })) + (await p.leaveTransaction.count({ where: { leaveTypeId: old.id } }));
+    if (used) await p.leaveType.update({ where: { id: old.id }, data: { isActive: false } });
+    else {
+      await p.leavePolicyRule.deleteMany({ where: { leaveTypeId: old.id } });
+      await p.leaveType.delete({ where: { id: old.id } });
+    }
+  }
   const ids = {};
   let order = 10;
   for (const t of TYPES) {
@@ -70,7 +80,7 @@ const RULES = {
       ...rest, accrual: 'NONE', excludeWeeklyOffs: true, excludeHolidays: true, requiresApproval: true, countryCodes: ['AE'],
       resetBalance: rest.balanceTracking, carryForwardType: carry ? 'CARRY_FORWARD' : 'NONE', calendarStartMonth: rest.balanceTracking ? 1 : null, sortOrder: (order += 10),
     };
-    Object.assign(data, { genderRestriction: null, maxTimesInService: null, eventWindowMonths: null, eventLabel: null, payPercent: rest.isPaid ? 100 : 0 }, EXTRA[t.code] ?? {});
+    Object.assign(data, { variants: [], variantLabel: null, genderRestriction: null, maxTimesInService: null, eventWindowMonths: null, eventLabel: null, payPercent: rest.isPaid ? 100 : 0 }, EXTRA[t.code] ?? {});
     const row = await p.leaveType.upsert({ where: { code: t.code }, create: data, update: data });
     ids[t.code] = row.id;
   }

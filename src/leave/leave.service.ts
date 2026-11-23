@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { FileStorageService, UploadedFileLike } from '../common/services/file-storage.service';
 import { AuditService } from '../common/services/audit.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserType } from '../common/constants/user-types';
@@ -34,6 +35,7 @@ export class LeaveService {
     private readonly roster: RosterService,
     private readonly processing: AttendanceProcessingService,
     private readonly entitlement: EntitlementService,
+    private readonly files: FileStorageService,
   ) {}
 
   /* ------------------------------------------------------------------ who is asking */
@@ -159,6 +161,8 @@ export class LeaveService {
     await this.checkConditions(employeeId, type, dto, excludeApplicationId);
     const { result, noRoster } = await this.calculate(employeeId, type, dto.fromDate, dto.toDate, halfDay, excludeApplicationId);
     if (result.totalDays <= 0) throw new BadRequestException('The days you chose are all off days or holidays, so there is no leave to take');
+    const chosen = ((type.variants as { label: string; maxDays: number }[]) ?? []).find((v) => v.label === dto.variant);
+    if (chosen && result.totalDays > chosen.maxDays) throw new BadRequestException(`${type.name} (${chosen.label}) can be at most ${chosen.maxDays} days`);
     if (type.maxDaysPerRequest && result.totalDays > type.maxDaysPerRequest) throw new BadRequestException(`${type.name} can be at most ${type.maxDaysPerRequest} days at a time`);
     const overlap = await this.prisma.leaveApplication.findFirst({ where: { employeeId, status: { in: ['PENDING', 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, fromDate: { lte: to }, toDate: { gte: from } } });
     if (overlap) throw new ConflictException(`You already have leave from ${toIsoDate(overlap.fromDate)} to ${toIsoDate(overlap.toDate)} that overlaps these dates`);
@@ -177,9 +181,20 @@ export class LeaveService {
     return null;
   }
 
-  /** Leave types this employee cannot use yet because an earlier step still has days left. */
+  /** The Gender text on the employee's profile (lower case), or null when not filled in. */
+  private async genderOf(employeeId: number): Promise<string | null> {
+    const p = await this.prisma.employeeProfileSection.findUnique({ where: { employeeId_sectionKey: { employeeId, sectionKey: 'personal' } }, select: { data: true } });
+    const g = (p?.data as { gender?: unknown } | null)?.gender;
+    return typeof g === 'string' && g.trim() ? g.trim().toLowerCase() : null;
+  }
+
+  /** Leave types hidden from this employee: a step whose earlier steps still have days left, or a type for the other gender. */
   async lockedTypeIds(employeeId: number): Promise<Set<number>> {
     const locked = new Set<number>();
+    const gender = await this.genderOf(employeeId);
+    for (const t of await this.prisma.leaveType.findMany({ where: { isActive: true, genderRestriction: { not: null } }, select: { id: true, genderRestriction: true } })) {
+      if (gender !== t.genderRestriction!.trim().toLowerCase()) locked.add(t.id);
+    }
     for (const t of await this.prisma.leaveType.findMany({ where: { isActive: true, unlockAfterTypeIds: { isEmpty: false } }, select: { id: true, unlockAfterTypeIds: true } })) {
       if (await this.firstUnexhausted(employeeId, t.unlockAfterTypeIds)) locked.add(t.id);
     }
@@ -187,7 +202,9 @@ export class LeaveService {
   }
 
   /** The conditions a leave type puts on who can take it and when (gender, times in service, event window). */
-  private async checkConditions(employeeId: number, type: { id: number; name: string; unlockAfterTypeIds: number[]; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
+  private async checkConditions(employeeId: number, type: { id: number; name: string; variants: unknown; variantLabel: string | null; unlockAfterTypeIds: number[]; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
+    const variants = (type.variants as { label: string; maxDays: number }[]) ?? [];
+    if (variants.length && !variants.some((v) => v.label === dto.variant)) throw new BadRequestException(`Choose the ${(type.variantLabel || 'option').toLowerCase()} for ${type.name}`);
     if (type.unlockAfterTypeIds.length) {
       const first = await this.firstUnexhausted(employeeId, type.unlockAfterTypeIds);
       if (first) throw new BadRequestException(`${type.name} can be used only after ${first} is used up`);
@@ -236,7 +253,7 @@ export class LeaveService {
       if (available < result.totalDays) throw new BadRequestException(`Not enough ${type.name}: ${available} available, ${result.totalDays} needed`);
     }
     const created = await this.prisma.leaveApplication.create({
-      data: { employeeId, leaveTypeId: type.id, fromDate: from, toDate: to, halfDayPart: dto.halfDayPart ?? null, eventDate: dto.eventDate ? parseIsoDate(dto.eventDate)! : null, requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: result.totalDays, reason: dto.reason?.trim() || null, calculation: result.days as unknown as Prisma.InputJsonValue },
+      data: { employeeId, leaveTypeId: type.id, fromDate: from, toDate: to, halfDayPart: dto.halfDayPart ?? null, eventDate: dto.eventDate ? parseIsoDate(dto.eventDate)! : null, variant: dto.variant ?? null, requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: result.totalDays, reason: dto.reason?.trim() || null, calculation: result.days as unknown as Prisma.InputJsonValue },
     });
     // A leave type that needs no approval is approved the moment it is sent (days taken from the balance, attendance marked).
     if (!type.requiresApproval) {
@@ -261,7 +278,38 @@ export class LeaveService {
       return;
     }
 
+    if (app.leaveType.requiresDocument && num(app.totalDays) > app.leaveType.documentAfterDays && !app.attachmentFileId) {
+      throw new ConflictException(`${app.leaveType.name} needs a supporting document. Ask the employee to attach it first.`);
+    }
     await this.approveApplication(user, app, ip, note);
+  }
+
+  /* ------------------------------------------------------------------ supporting document */
+
+  /** Attach (or replace) the supporting document of an application that has not been decided. The employee or HR may do it. */
+  async attach(user: CurrentUserPayload, id: number, file: UploadedFileLike | undefined, ip?: string) {
+    if (!file) throw new BadRequestException('Choose a file to attach');
+    if (file.size > 10 * 1024 * 1024) throw new BadRequestException('The file can be at most 10 MB');
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)) throw new BadRequestException('Attach a PDF, JPG or PNG file');
+    const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { employee: { select: { profileId: true } } } });
+    if (!app) throw new NotFoundException('Application not found');
+    const own = app.employee.profileId === user.profileId;
+    if (!own && !HR_TYPES.includes(user.userTypeId)) throw new ForbiddenException('You can attach a document only to your own leave');
+    if (app.status !== 'PENDING') throw new ConflictException('The document can be attached only while the leave is waiting for a decision');
+    const saved = await this.files.saveFile(file);
+    const row = await this.prisma.storedFile.create({ data: { originalName: saved.originalName, storageKey: saved.storageKey, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes, sha256: saved.sha256, createdById: user.profileId } });
+    await this.prisma.leaveApplication.update({ where: { id }, data: { attachmentFileId: row.id } });
+    if (app.attachmentFileId) await this.prisma.storedFile.update({ where: { id: app.attachmentFileId }, data: { isActive: false } });
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_DOCUMENT_ATTACHED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip });
+    return { name: saved.originalName };
+  }
+
+  /** The supporting document, for the employee, HR, or the manager who decides. */
+  async attachment(user: CurrentUserPayload, id: number) {
+    const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { employee: { select: { profileId: true } }, attachmentFile: true } });
+    if (!app || !app.attachmentFile) throw new NotFoundException('There is no document on this application');
+    if (app.employee.profileId !== user.profileId) await this.assertMayDecide(user, app.employeeId);
+    return { stream: this.files.readFile(app.attachmentFile.storageKey), name: app.attachmentFile.originalName, mimeType: app.attachmentFile.mimeType };
   }
 
   /** Approves one pending application: counts the days again, takes them from the balance and marks the attendance. */
@@ -332,7 +380,7 @@ export class LeaveService {
 
   /* ------------------------------------------------------------------ reading */
 
-  private include = { leaveType: { select: { id: true, code: true, name: true, isPaid: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } } as const;
+  private include = { leaveType: { select: { id: true, code: true, name: true, isPaid: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } }, attachmentFile: { select: { originalName: true } } } as const;
 
   private present(a: Prisma.LeaveApplicationGetPayload<{ include: LeaveService['include'] }>) {
     return {
@@ -353,6 +401,9 @@ export class LeaveService {
       decidedAt: a.decidedAt,
       createdAt: a.createdAt,
       calculation: a.calculation,
+      variant: a.variant,
+      hasAttachment: a.attachmentFileId !== null,
+      attachmentName: a.attachmentFile?.originalName ?? null,
     };
   }
 

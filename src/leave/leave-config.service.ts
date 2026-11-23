@@ -88,6 +88,8 @@ export class LeaveConfigService {
       eventLabel: dto.eventWindowMonths ? dto.eventLabel?.trim() || 'Event date' : null,
       payPercent: dto.payPercent ?? (dto.isPaid ? 100 : 0),
       unlockAfterTypeIds: [...new Set(dto.unlockAfterTypeIds ?? [])],
+      variants: (dto.variants ?? []).filter((v) => v.label.trim()).map((v) => ({ label: v.label.trim(), maxDays: v.maxDays })) as unknown as Prisma.InputJsonValue,
+      variantLabel: (dto.variants ?? []).length ? dto.variantLabel?.trim() || 'Choose one' : null,
       calendarStartMonth: dto.calendarStartMonth ?? null,
       isCompOff: dto.isCompOff,
       isActive: dto.isActive ?? true,

@@ -10,6 +10,12 @@ export class CarryRuleDto {
   @IsOptional() @Type(() => Number) @IsInt() targetLeaveTypeId?: number | null;
 }
 
+/** One choice offered when applying, with the longest leave it allows. */
+export class VariantDto {
+  @IsString() @IsNotEmpty() @MaxLength(100) label: string;
+  @Type(() => Number) @IsInt() @Min(1) @Max(366) maxDays: number;
+}
+
 export class LeaveTypeDto {
   @IsString() @IsNotEmpty() @MaxLength(10) @Matches(/^[A-Za-z0-9_-]+$/) code: string;
   @IsString() @IsNotEmpty() @MaxLength(60) name: string;
@@ -36,6 +42,8 @@ export class LeaveTypeDto {
   @IsOptional() @IsString() @MaxLength(60) eventLabel?: string | null;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100) payPercent?: number;
   @IsOptional() @IsArray() @Type(() => Number) @IsInt({ each: true }) unlockAfterTypeIds?: number[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => VariantDto) variants?: VariantDto[];
+  @IsOptional() @IsString() @MaxLength(60) variantLabel?: string | null;
   /** Month (1-12) this type's calendar starts in; empty = the company leave year. */
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(12) calendarStartMonth?: number | null;
   @IsBoolean() isCompOff: boolean;
@@ -62,6 +70,7 @@ export class LeaveRequestDto {
   @IsString() @Matches(DATE) toDate: string;
   @IsOptional() @IsIn(['FIRST', 'SECOND']) halfDayPart?: string;
   @IsOptional() @IsString() @Matches(DATE) eventDate?: string;
+  @IsOptional() @IsString() @MaxLength(100) variant?: string;
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
 }
 

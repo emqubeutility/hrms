@@ -44,6 +44,8 @@ export default function LeavePoliciesPanel() {
     getParameters('Employee Type').then((r) => setEmpTypes(r.data)).catch(() => {});
   }, [isAuthenticated, load]);
 
+  /** The leave type whose rule is open in the accordion (one at a time). */
+  const [openRule, setOpenRule] = useState<number | null>(null);
   const setForm = (patch: Partial<LeavePolicyPayload>) => setEditing((e) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
   const setRule = (i: number, patch: Partial<PolicyRule>) => setEditing((e) => (e ? { ...e, form: { ...e.form, rules: e.form.rules.map((r, k) => (k === i ? { ...r, ...patch } : r)) } } : e));
 
@@ -155,11 +157,20 @@ export default function LeavePoliciesPanel() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between"><p className="text-sm font-semibold text-gray-900">Rules by leave type</p>
-                {!editing.used && <Select className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm" value="" onChange={(e) => { if (e.target.value) setForm({ rules: [...editing.form.rules, blankRule(Number(e.target.value))] }); }}><option value="">+ Add leave type…</option>{types.filter((t) => !editing.form.rules.some((r) => r.leaveTypeId === t.id)).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>}
+                {!editing.used && <Select className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm" value="" onChange={(e) => { if (e.target.value) { setForm({ rules: [...editing.form.rules, blankRule(Number(e.target.value))] }); setOpenRule(Number(e.target.value)); } }}><option value="">+ Add leave type…</option>{types.filter((t) => !editing.form.rules.some((r) => r.leaveTypeId === t.id)).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>}
               </div>
               {editing.form.rules.map((r, i) => (
-                <fieldset key={r.leaveTypeId} disabled={editing.used} className="space-y-3 rounded-lg border border-gray-200 p-3">
-                  <div className="flex items-center justify-between"><p className="font-medium text-gray-900">{types.find((t) => t.id === r.leaveTypeId)?.name ?? r.leaveType}</p>{!editing.used && <button type="button" className="text-xs text-red-600" onClick={() => setForm({ rules: editing.form.rules.filter((_, k) => k !== i) })}>Remove</button>}</div>
+                <div key={r.leaveTypeId} className="rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                    <button type="button" aria-expanded={openRule === r.leaveTypeId} onClick={() => setOpenRule(openRule === r.leaveTypeId ? null : r.leaveTypeId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                      <svg className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${openRule === r.leaveTypeId ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+                      <span className="truncate font-medium text-gray-900">{types.find((t) => t.id === r.leaveTypeId)?.name ?? r.leaveType}</span>
+                      <span className="truncate text-xs text-gray-500">{r.formula ? 'formula' : `${r.annualDays} days a year`}, {CREDIT_LABEL[r.creditMethod].toLowerCase()}{r.slabs?.length ? `, ${r.slabs.length} service slab${r.slabs.length === 1 ? '' : 's'}` : ''}</span>
+                    </button>
+                    {!editing.used && <button type="button" className="shrink-0 text-xs text-red-600" onClick={() => { setForm({ rules: editing.form.rules.filter((_, k) => k !== i) }); if (openRule === r.leaveTypeId) setOpenRule(null); }}>Remove</button>}
+                  </div>
+                  {openRule === r.leaveTypeId && (
+                <fieldset disabled={editing.used} className="space-y-3 border-t border-gray-200 p-3">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <Label text="Days per year"><input type="number" step="0.5" min={0} className={fieldClass} value={r.annualDays} onChange={(e) => setRule(i, { annualDays: Number(e.target.value) })} /></Label>
                     <Label text="Credited"><Select className={fieldClass} value={r.creditMethod} onChange={(e) => setRule(i, { creditMethod: e.target.value as PolicyRule['creditMethod'] })}>{Object.entries(CREDIT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Label>
@@ -190,6 +201,8 @@ export default function LeavePoliciesPanel() {
                     )}
                   </div>
                 </fieldset>
+                  )}
+                </div>
               ))}
               {editing.form.rules.length === 0 && <p className="text-sm text-gray-500">Add the leave types this policy covers.</p>}
             </div>

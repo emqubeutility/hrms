@@ -1,4 +1,7 @@
-import { Body, Controller, Delete, Get, Ip, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Ip, Param, ParseIntPipe, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
+import { UploadedFileLike } from '../common/services/file-storage.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -67,6 +70,20 @@ export class LeaveController {
   @Get('applications/team')
   async team(@Query('status') status: string | undefined, @CurrentUser() u: CurrentUserPayload) {
     return ok(await this.service.team(u, status), 'Applications retrieved');
+  }
+
+  @Post('applications/:id/attachment')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024, files: 1 } }))
+  async attach(@Param('id', ParseIntPipe) id: number, @UploadedFile() file: UploadedFileLike | undefined, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return ok(await this.service.attach(u, id, file, ip), 'Document attached');
+  }
+
+  @Get('applications/:id/attachment')
+  async attachment(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Res() res: Response) {
+    const { stream, name, mimeType } = await this.service.attachment(u, id);
+    res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
+    stream.pipe(res);
   }
 
   @Put('applications/:id/decision')
