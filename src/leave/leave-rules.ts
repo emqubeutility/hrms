@@ -122,9 +122,10 @@ export function countLeaveDays(
     days.sort((a, b) => (a.date < b.date ? -1 : 1));
   }
 
-  const requestedDays = days.filter((d) => d.reason === 'LEAVE' || d.reason === 'HALF_DAY').reduce((s, d) => s + d.days, 0);
-  const sandwichDays = days.filter((d) => d.reason.startsWith('SANDWICH')).reduce((s, d) => s + d.days, 0);
-  return { requestedDays, sandwichDays, totalDays: requestedDays + sandwichDays, days };
+  const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const requestedDays = r2(days.filter((d) => d.reason === 'LEAVE' || d.reason === 'HALF_DAY').reduce((s, d) => s + d.days, 0));
+  const sandwichDays = r2(days.filter((d) => d.reason.startsWith('SANDWICH')).reduce((s, d) => s + d.days, 0));
+  return { requestedDays, sandwichDays, totalDays: r2(requestedDays + sandwichDays), days };
 }
 
 /* ------------------------------------------------------------------ balances */

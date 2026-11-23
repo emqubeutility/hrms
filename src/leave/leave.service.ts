@@ -18,6 +18,8 @@ import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLea
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
 const MARGIN = 7;
 const num = (d: Prisma.Decimal | number) => Number(d);
+/** Days are shown to 2 decimals: adding decimals as JS numbers leaves tails like 27.450000000000003. */
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const rangeDates = (from: string, to: string): string[] => {
   const out: string[] = [];
   for (let d = from; d <= to; d = isoAdd(d, 1)) out.push(d);
@@ -115,10 +117,10 @@ export class LeaveService {
     const out = [];
     for (const t of types) {
       const credits = t.balanceTracking ? await this.creditsOf(employeeId, t.id) : [];
-      const balance = credits.reduce((s, c) => s + c.remaining, 0);
-      const pend = num(pending.find((p) => p.leaveTypeId === t.id)?._sum.totalDays ?? 0);
+      const balance = round2(credits.reduce((s, c) => s + c.remaining, 0));
+      const pend = round2(num(pending.find((p) => p.leaveTypeId === t.id)?._sum.totalDays ?? 0));
       const next = credits.filter((c) => c.expiresOn).sort((a, b) => (a.expiresOn! < b.expiresOn! ? -1 : 1))[0];
-      out.push({ leaveTypeId: t.id, code: t.code, name: t.name, isPaid: t.isPaid, balanceTracking: t.balanceTracking, balance, pending: pend, available: balance - pend, nextExpiry: next?.expiresOn ?? null });
+      out.push({ leaveTypeId: t.id, code: t.code, name: t.name, isPaid: t.isPaid, balanceTracking: t.balanceTracking, balance, pending: pend, available: round2(balance - pend), nextExpiry: next?.expiresOn ?? null });
     }
     return out;
   }
@@ -230,7 +232,7 @@ export class LeaveService {
   private async available(employeeId: number, typeId: number): Promise<number> {
     const credits = await this.creditsOf(employeeId, typeId);
     const pending = await this.prisma.leaveApplication.aggregate({ where: { employeeId, leaveTypeId: typeId, status: 'PENDING' }, _sum: { totalDays: true } });
-    return credits.reduce((s, c) => s + c.remaining, 0) - num(pending._sum.totalDays ?? 0);
+    return round2(credits.reduce((s, c) => s + c.remaining, 0) - num(pending._sum.totalDays ?? 0));
   }
 
   /** What an application would take, before it is sent. */
@@ -473,11 +475,11 @@ export class LeaveService {
     return rows.map((c) => {
       const quantity = num(c.quantity);
       const remaining = num(c.remaining);
-      const used = c.allocations.reduce((sum, a) => sum + num(a.days), 0);
+      const used = round2(c.allocations.reduce((sum, a) => sum + num(a.days), 0));
       const expiresOn = c.expiresOn ? toIsoDate(c.expiresOn) : null;
       const past = expiresOn !== null && expiresOn < todayStr;
       // Expired: the date has passed. Whatever was not used is lost (the nightly job zeroes it, so work it out from what was used).
-      const lost = past ? Math.max(0, remaining > 0 ? remaining : quantity - used) : 0;
+      const lost = past ? round2(Math.max(0, remaining > 0 ? remaining : quantity - used)) : 0;
       let state: 'ACTIVE' | 'EXPIRING' | 'USED' | 'EXPIRED';
       if (past && lost > 0) state = 'EXPIRED';
       else if (remaining <= 0) state = 'USED';

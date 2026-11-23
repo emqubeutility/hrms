@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, openLeaveDocument, uploadLeaveDocument, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
+import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, fmtDays, openLeaveDocument, uploadLeaveDocument, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
 import Select from '../../components/Select';
 import Modal from '../../components/Modal';
@@ -130,8 +130,8 @@ export default function MyLeavePage() {
         {balances.filter((b) => b.balanceTracking).map((b) => (
           <div key={b.leaveTypeId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{b.name}</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">{b.available}<span className="ml-1 text-sm font-normal text-gray-400">days</span></p>
-            <p className="mt-1 text-xs text-gray-500">{b.pending > 0 ? `${b.pending} waiting approval` : 'Available to take'}{b.nextExpiry ? ` · some expires ${b.nextExpiry}` : ''}</p>
+            <p className="mt-1 text-2xl font-semibold text-gray-900">{fmtDays(b.available)}<span className="ml-1 text-sm font-normal text-gray-400">days</span></p>
+            <p className="mt-1 text-xs text-gray-500">{b.pending > 0 ? `${fmtDays(b.pending)} waiting approval` : 'Available to take'}{b.nextExpiry ? ` · some expires ${b.nextExpiry}` : ''}</p>
           </div>
         ))}
       </div>
@@ -202,7 +202,7 @@ export default function MyLeavePage() {
             <div className="mt-3 space-y-3">
               <p className="text-3xl font-semibold text-gray-900">{preview.totalDays} <span className="text-base font-normal text-gray-500">day{preview.totalDays === 1 ? '' : 's'}</span></p>
               {preview.sandwichDays > 0 && <p className="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800">{preview.requestedDays} day(s) you asked for plus {preview.sandwichDays} off day(s) counted by the sandwich leave rule.</p>}
-              {preview.available !== null && <p className={`text-sm ${preview.enough ? 'text-gray-600' : 'font-medium text-red-700'}`}>{preview.enough ? `Your available balance is ${preview.available} day(s).` : `Not enough balance: ${preview.available} available.`}</p>}
+              {preview.available !== null && <p className={`text-sm ${preview.enough ? 'text-gray-600' : 'font-medium text-red-700'}`}>{preview.enough ? `Your available balance is ${fmtDays(preview.available)} day(s).` : `Not enough balance: ${fmtDays(preview.available)} available.`}</p>}
               {preview.warnings.map((w) => <p key={w} className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{w}</p>)}
               <div className="max-h-56 overflow-auto rounded-lg border border-gray-200">
                 <table className="min-w-full text-sm">

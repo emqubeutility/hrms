@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { BranchOption, CountryItem, MasterItem, getBranches, getCountries, getSites } from '../../lib/api';
 import { searchEmployeeOptions } from '../../lib/bulk-api';
-import { GroupTarget, LeaveBalance, LeaveType, LedgerRow, adjustBalance, adjustGroup, getBalancesOf, getGroupCount, getLeaveTypes, getLedger } from '../../lib/leave-api';
+import { GroupTarget, LeaveBalance, LeaveType, LedgerRow, adjustBalance, adjustGroup, fmtDays, getBalancesOf, getGroupCount, getLeaveTypes, getLedger } from '../../lib/leave-api';
 import { fieldClass } from '../Drawer';
 import Select from '../Select';
 
@@ -199,8 +199,8 @@ export default function LeaveBalancesPanel() {
               {balances.filter((b) => b.balanceTracking).map((b) => (
                 <div key={b.leaveTypeId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{b.name}</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">{b.balance}</p>
-                  <p className="mt-1 text-xs text-gray-500">{b.pending > 0 ? `${b.pending} waiting approval` : 'None waiting'}{b.nextExpiry ? ` · expires ${b.nextExpiry}` : ''}</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">{fmtDays(b.balance)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{b.pending > 0 ? `${fmtDays(b.pending)} waiting approval` : 'None waiting'}{b.nextExpiry ? ` · expires ${b.nextExpiry}` : ''}</p>
                 </div>
               ))}
             </div>

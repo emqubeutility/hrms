@@ -225,3 +225,6 @@ export async function openLeaveDocument(id: number) {
   if (!res.ok) throw new Error('Could not open the document');
   window.open(URL.createObjectURL(await res.blob()), '_blank');
 }
+
+/** Days to at most 2 decimals (27.450000000000003 shows as 27.45). */
+export const fmtDays = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(Math.round((Number(n) + Number.EPSILON) * 100) / 100));
