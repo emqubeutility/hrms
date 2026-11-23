@@ -22,7 +22,6 @@ const LOOKUPS = { nationalities: ['Indian', 'Emirati'], departments: ['Sales', '
     'Notice Period': ['1 month', '2 months'],
     Grade: ['G3'],
     'Attendance Processing': ['Automatic'],
-    'OT Configuration': ['None'],
     'Skill Proficiency': ['Beginner'],
     'Access Role': ['Employee'],
     'Login Status': ['Active'],
@@ -34,9 +33,20 @@ const section = (country: 'IN' | 'AE' | 'GB' | 'US', key: string): SectionDef =>
   buildSections(country, LOOKUPS).find((s) => s.key === key) as SectionDef;
 
 describe('profile schema: sections', () => {
-  it('builds the eight tabs from the layout workbook, in order', () => {
+  it('builds the tabs from the layout workbook, in order, with AirFare last', () => {
     const keys = buildSections('IN').map((s) => s.key);
-    expect(keys).toEqual(['personal', 'employment', 'organization', 'attendance', 'bank', 'documents', 'education', 'access']);
+    expect(keys).toEqual(['personal', 'employment', 'organization', 'attendance', 'bank', 'documents', 'education', 'access', 'airfare']);
+  });
+
+  it('AirFare: ticket details only when eligible, family members only with family airfare', () => {
+    const fields = section('IN', 'airfare').groups[0].fields!;
+    const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));
+    expect(byKey.airfareEligible.display).toBe('checkbox');
+    expect(byKey.ticketType.options).toEqual(['Airfare', 'Airticket']);
+    expect(byKey.eligibilityType.options).toEqual(['12 Month', '24 months']);
+    expect(byKey.ticketType.showWhen).toEqual({ key: 'airfareEligible', equals: 'Yes' });
+    expect(byKey.familyMembers.required).toBe(true);
+    expect(byKey.familyMembers.showWhen).toEqual({ key: 'familyAirfare', equals: 'Yes' });
   });
 
   it('marks System Access as HR-only', () => {

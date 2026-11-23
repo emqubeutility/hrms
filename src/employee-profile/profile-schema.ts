@@ -21,6 +21,7 @@ export const SECTION_KEYS = [
   'documents',
   'education',
   'access',
+  'airfare',
 ] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
@@ -42,7 +43,7 @@ export interface FieldDef {
   /** Render a Yes/No field as a checkbox (stored as "Yes" / "No"). */
   display?: 'checkbox';
   /** Options come from a master table at request time (see Lookups). */
-  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts' | 'weeklyOffs';
+  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts' | 'weeklyOffs' | 'overtimeConfigurations';
   /** Options come from the parameter type with this name (Masters > Parameters). */
   optionsParameter?: string;
   /** Show this field only when another field in the same section equals a value; hidden fields are not stored or required. */
@@ -78,6 +79,8 @@ export interface Lookups {
   branches?: OptionItem[];
   /** Active employees other than the one being edited (value = employee id). */
   employees?: OptionItem[];
+  /** Active overtime configurations (value = configuration id; Attendance setup > Overtime). */
+  overtimeConfigurations?: OptionItem[];
 }
 
 export interface RowsDef {
@@ -202,8 +205,12 @@ export function buildSections(country: CountryCode, lookups: Lookups = {}, rules
   const fill = (f: FieldDef): FieldDef => {
     if (f.optionsParameter) return { ...f, options: lookups.parameters?.[f.optionsParameter] ?? [] };
     if (!f.optionsSource) return f;
-    if (f.optionsSource === 'employees' || f.optionsSource === 'branches' || f.optionsSource === 'shifts') {
-      const items = (f.optionsSource === 'employees' ? lookups.employees : f.optionsSource === 'branches' ? lookups.branches : lookups.shifts) ?? [];
+    if (f.optionsSource === 'employees' || f.optionsSource === 'branches' || f.optionsSource === 'shifts' || f.optionsSource === 'overtimeConfigurations') {
+      const items =
+        (f.optionsSource === 'employees' ? lookups.employees
+          : f.optionsSource === 'branches' ? lookups.branches
+          : f.optionsSource === 'shifts' ? lookups.shifts
+          : lookups.overtimeConfigurations) ?? [];
       return { ...f, options: items.map((i) => i.value), optionItems: items };
     }
     return { ...f, options: lookups[f.optionsSource] ?? [] };
@@ -330,7 +337,8 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('shift', 'Shift', 'select', { optionsSource: 'shifts' }),
           F('roster', 'Roster', 'select', { optionsParameter: 'Roster' }),
           F('weeklyOff', 'Weekly off', 'select', { optionsSource: 'weeklyOffs' }),
-          F('otConfiguration', 'OT configuration', 'select', { optionsParameter: 'OT Configuration' }),
+          F('otConfiguration', 'OT configuration', 'select', { optionsSource: 'overtimeConfigurations', hint: 'Set up under Administration > Attendance setup > Overtime' }),
+          F('otAmountOverride', 'OT fixed amount override', 'number', { hint: 'Only for a fixed OT configuration. Leave blank to use the configuration amount.' }),
         ] },
       ],
     },
@@ -419,6 +427,20 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('accessRole', 'Role', 'select', { optionsParameter: 'Access Role' }),
           F('loginStatus', 'Login status', 'select', { optionsParameter: 'Login Status' }),
           F('twoFactorAuthentication', 'Two-factor authentication', 'select', { optionsParameter: 'Two-Factor Authentication' }),
+        ] },
+      ],
+    },
+    {
+      key: 'airfare', title: 'AirFare', group: 'Benefits', hrOnly: false,
+      description: 'Air ticket eligibility, ticket type, eligibility period and rate, and family tickets.',
+      groups: [
+        { title: 'Airfare eligibility', fields: [
+          F('airfareEligible', 'Airfare eligibility', 'yn', { display: 'checkbox' }),
+          F('ticketType', 'Ticket type', 'select', { required: true, options: ['Airfare', 'Airticket'], showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
+          F('eligibilityType', 'Eligibility type', 'select', { required: true, options: ['12 Month', '24 months'], showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
+          F('airfareRate', 'Airfare rate', 'number', { showWhen: { key: 'airfareEligible', equals: 'Yes' }, hint: 'Amount per ticket' }),
+          F('familyAirfare', 'Family airfare', 'yn', { display: 'checkbox', showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
+          F('familyMembers', 'No. of family members', 'number', { required: true, showWhen: { key: 'familyAirfare', equals: 'Yes' } }),
         ] },
       ],
     },

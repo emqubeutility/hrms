@@ -35,6 +35,7 @@ import {
 } from './profile-schema';
 import { CreateCustomFieldDto, UpdateCustomFieldDto } from './dto/custom-field.dto';
 import { ProfileRulesService } from './profile-rules.service';
+import { isFixedOvertime } from '../overtime/overtime-rules';
 
 const HR_ROLES = [UserType.SystemAdmin, UserType.HRAdmin];
 
@@ -94,7 +95,7 @@ export class EmployeeProfileService {
    * and active employees for manager pickers (excluding the employee being edited).
    */
   private async lookups(excludeEmployeeId?: number, branchAccess?: number[] | null, country?: CountryCode): Promise<Lookups> {
-    const [languages, nationalities, noticeReasons, departments, employeeTypes, relationships, branches, employees, shifts, genericParams, weeklyOffs] = await Promise.all([
+    const [languages, nationalities, noticeReasons, departments, employeeTypes, relationships, branches, employees, shifts, genericParams, weeklyOffs, overtimeConfigs] = await Promise.all([
       this.prisma.language.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
       this.prisma.parameter.findMany({
         where: { isVisible: true, parameterType: { name: 'Nationality' } },
@@ -139,6 +140,7 @@ export class EmployeeProfileService {
         select: { text: true, parameterType: { select: { name: true } } },
       }),
       this.prisma.weeklyOffTemplate.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
+      this.prisma.overtimeConfiguration.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
     const parameters: Record<string, string[]> = {};
     for (const p of genericParams) (parameters[p.parameterType.name] ??= []).push(p.text);
@@ -152,6 +154,7 @@ export class EmployeeProfileService {
       parameters,
       weeklyOffs: weeklyOffs.map((w) => w.name),
       shifts: shifts.map((s) => ({ value: String(s.id), label: s.name })),
+      overtimeConfigurations: overtimeConfigs.map((c) => ({ value: String(c.id), label: c.name })),
       branches: branches.map((b) => ({ value: String(b.id), label: b.name })),
       employees: employees.map((e) => ({
         value: String(e.id),
@@ -275,6 +278,7 @@ export class EmployeeProfileService {
 
     // Compensation: amounts must match the chosen salary template.
     errors.push(...(await this.checkSalary(section, result, body.data ?? {}, country, existing.salaryTemplateId)));
+    errors.push(...(await this.checkOvertime(section, result, existing.otConfiguration)));
 
     // 2) Custom fields for this tab and country
     const defs = (await this.prisma.customFieldDefinition.findMany({ where: { isActive: true, tabKey: sectionKey } }))
@@ -494,6 +498,34 @@ export class EmployeeProfileService {
     return check.errors;
   }
 
+  /**
+   * OT configuration (Attendance section): the rule must be active (or the one already chosen); an amount
+   * override is only kept for a fixed rule, and is blank when not given. Mutates result.values to the cleaned form.
+   */
+  private async checkOvertime(section: SectionDef, result: { values: Record<string, unknown> }, existingConfigId?: unknown): Promise<{ field: string; message: string }[]> {
+    if (section.key !== 'attendance') return [];
+    const rawId = result.values.otConfiguration;
+    const hasOverride = result.values.otAmountOverride !== undefined && result.values.otAmountOverride !== null && result.values.otAmountOverride !== '';
+    if (rawId === undefined || rawId === null || rawId === '') {
+      result.values.otAmountOverride = null;
+      return hasOverride ? [{ field: 'otConfiguration', message: 'Choose an OT configuration before entering an amount' }] : [];
+    }
+    const configId = Number(rawId);
+    if (!Number.isInteger(configId)) return [{ field: 'otConfiguration', message: 'OT configuration is not valid' }];
+    const config = await this.prisma.overtimeConfiguration.findUnique({ where: { id: configId } });
+    if (!config || (!config.isActive && Number(existingConfigId) !== configId)) {
+      return [{ field: 'otConfiguration', message: 'Choose an active OT configuration' }];
+    }
+    result.values.otConfiguration = String(configId);
+    if (!hasOverride) {
+      result.values.otAmountOverride = null;
+      return [];
+    }
+    if (!isFixedOvertime(config.type)) return [{ field: 'otAmountOverride', message: 'An amount override applies only to a fixed OT configuration' }];
+    result.values.otAmountOverride = Number(result.values.otAmountOverride);
+    return [];
+  }
+
   /** Custom field values for one tab: known codes, typed values, required fields present. */
   private checkCustom(
     defs: { code: string; label: string; fieldType: string; options: unknown; isRequired: boolean }[],
@@ -539,6 +571,7 @@ export class EmployeeProfileService {
       const result = validateSection(section, country, data);
       const list = [...result.errors];
       list.push(...(await this.checkSalary(section, result, data, country)));
+      list.push(...(await this.checkOvertime(section, result, undefined)));
       list.push(...this.checkCustom(customDefs.filter((d) => d.tabKey === section.key), body.custom ?? {}, new Set()));
       if (list.length) errors[section.key] = list;
     }

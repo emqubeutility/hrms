@@ -12,7 +12,7 @@ export interface BulkFieldDef {
   section: 'organization' | 'employment' | 'attendance';
   type: BulkFieldType;
   /** Where the options come from (select fields). */
-  source?: 'branches' | 'employees' | 'shifts' | 'weeklyOffs' | { parameter: string };
+  source?: 'branches' | 'employees' | 'shifts' | 'weeklyOffs' | 'overtimeConfigurations' | { parameter: string };
   /** The value cannot be cleared (the profile needs it). */
   required?: boolean;
   /** The employee record column that must stay in step with the profile value. */
@@ -38,7 +38,7 @@ export const BULK_FIELDS: BulkFieldDef[] = [
   { key: 'attendanceProcessing', label: 'Attendance processing', section: 'attendance', type: 'select', source: { parameter: 'Attendance Processing' } },
   { key: 'roster', label: 'Roster group', section: 'attendance', type: 'select', source: { parameter: 'Roster' } },
   { key: 'weeklyOff', label: 'Weekly off', section: 'attendance', type: 'select', source: 'weeklyOffs', syncWeeklyOff: true },
-  { key: 'otConfiguration', label: 'OT configuration', section: 'attendance', type: 'select', source: { parameter: 'OT Configuration' } },
+  { key: 'otConfiguration', label: 'OT configuration', section: 'attendance', type: 'select', source: 'overtimeConfigurations' },
 ];
 
 export const MAX_BULK_EMPLOYEES = 500;

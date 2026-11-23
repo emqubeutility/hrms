@@ -17,6 +17,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveModule } from './leave/leave.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BulkUpdateModule } from './bulk-update/bulk-update.module';
+import { OvertimeModule } from './overtime/overtime.module';
 import appConfig from './config/app.config';
 
 import { CommonModule } from './common/common.module';
@@ -45,6 +46,7 @@ import { LoggerContextMiddleware } from './common/logger/logger-context.middlewa
     LeaveModule,
     DashboardModule,
     BulkUpdateModule,
+    OvertimeModule,
   ],
 })
 export class AppModule implements NestModule {

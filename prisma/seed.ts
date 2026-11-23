@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
+import { STARTER_OVERTIME_CONFIGURATIONS } from '../src/overtime/overtime-rules';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL_UNPOOLED });
 const prisma = new PrismaClient({ adapter });
@@ -147,6 +148,59 @@ async function seedParameterTypesAndParameters() {
       { id: 231, text: 'Residence', value: 2, order: 2, visible: true },
       { id: 232, text: 'Visit', value: 3, order: 3, visible: true },
       { id: 233, text: 'Tourist', value: 4, order: 4, visible: true },
+    ]},
+    // System Access tab of the employee profile. The role names match the user types (users.service), so keep them in step.
+    31: { name: 'Access Role', parameters: [
+      { id: 1001, text: 'Executive', value: 1, order: 1, visible: true },
+      { id: 1002, text: 'Manager', value: 2, order: 2, visible: true },
+      { id: 1003, text: 'SystemAdmin', value: 3, order: 3, visible: true },
+      { id: 1004, text: 'HRAdmin', value: 4, order: 4, visible: true },
+    ]},
+    32: { name: 'Login Status', parameters: [
+      { id: 1011, text: 'Active', value: 1, order: 1, visible: true },
+      { id: 1012, text: 'Locked', value: 2, order: 2, visible: true },
+      { id: 1013, text: 'Disabled', value: 3, order: 3, visible: true },
+    ]},
+    // Option lists for the profile dropdowns that had none. Lists marked "starter" are minimal and can be extended in System settings.
+    33: { name: 'Attendance Processing', parameters: [
+      { id: 2001, text: 'Automatic', value: 1, order: 1, visible: true },
+    ]},
+    35: { name: 'Skill Proficiency', parameters: [ // starter
+      { id: 2003, text: 'Beginner', value: 1, order: 1, visible: true },
+    ]},
+    36: { name: 'Notice Period', parameters: [
+      { id: 2004, text: '1 month', value: 1, order: 1, visible: true },
+      { id: 2005, text: '2 months', value: 2, order: 2, visible: true },
+    ]},
+    37: { name: 'Probation Period', parameters: [
+      { id: 2006, text: '3 months', value: 1, order: 1, visible: true },
+    ]},
+    38: { name: 'Roster', parameters: [
+      { id: 2007, text: 'Fixed', value: 1, order: 1, visible: true },
+      { id: 2008, text: 'Rotational', value: 2, order: 2, visible: true },
+    ]},
+    39: { name: 'Tax Regime', parameters: [
+      { id: 2009, text: 'Old Regime', value: 1, order: 1, visible: true },
+      { id: 2010, text: 'New Regime', value: 2, order: 2, visible: true },
+    ]},
+    40: { name: 'Bank Account Type', parameters: [
+      { id: 2011, text: 'Checking', value: 1, order: 1, visible: true },
+      { id: 2012, text: 'Savings', value: 2, order: 2, visible: true },
+    ]},
+    41: { name: 'Pension Auto-Enrolment', parameters: [
+      { id: 2013, text: 'Opted in', value: 1, order: 1, visible: true },
+      { id: 2014, text: 'Opted out', value: 2, order: 2, visible: true },
+    ]},
+    42: { name: 'Student Loan Plan', parameters: [
+      { id: 2015, text: 'Plan 1', value: 1, order: 1, visible: true },
+      { id: 2016, text: 'Plan 2', value: 2, order: 2, visible: true },
+      { id: 2017, text: 'Plan 4', value: 3, order: 3, visible: true },
+      { id: 2018, text: 'Plan 5', value: 4, order: 4, visible: true },
+      { id: 2019, text: 'Postgraduate loan', value: 5, order: 5, visible: true },
+    ]},
+    43: { name: 'State Withholding', parameters: [
+      ...['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming']
+        .map((text, i) => ({ id: 2100 + i, text, value: i + 1, order: i + 1, visible: true })),
     ]},
   };
 
@@ -527,7 +581,15 @@ async function seedReferenceMasters() {
   }
   // Keep "Other" at the end of the list.
   await prisma.parameter.updateMany({ where: { id: 204 }, data: { displayOrder: 999 } });
-  console.log(`Reference masters: ${sites.length} sites, ${languages.length} languages, ${shifts.length} shifts`);
+  // Overtime configurations (Attendance setup > Overtime): starter rules, by name; existing rules are never changed.
+  for (const s of STARTER_OVERTIME_CONFIGURATIONS) {
+    await prisma.overtimeConfiguration.upsert({
+      where: { name: s.name },
+      create: { name: s.name, type: s.type, fixedAmount: s.fixedAmount ?? null, weekdayMultiplier: s.weekdayMultiplier ?? null, weekendMultiplier: s.weekendMultiplier ?? null },
+      update: {},
+    });
+  }
+  console.log(`Reference masters: ${sites.length} sites, ${languages.length} languages, ${shifts.length} shifts, ${STARTER_OVERTIME_CONFIGURATIONS.length} overtime configurations`);
 }
 
 main()

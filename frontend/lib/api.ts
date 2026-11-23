@@ -881,6 +881,41 @@ export async function updateSalaryTemplate(id: number, payload: SalaryTemplatePa
   return request<SalaryTemplate>(`/salary-templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
 
+/* -------------------------------------------------------------- overtime configurations (Attendance setup > Overtime) */
+
+export type OvertimeType = 'FIXED_PER_DAY' | 'FIXED_MONTHLY' | 'HOURLY';
+
+export interface OvertimeConfigurationItem {
+  id: number;
+  name: string;
+  type: OvertimeType;
+  fixedAmount: number | null;
+  weekdayMultiplier: number | null;
+  weekendMultiplier: number | null;
+  isActive: boolean;
+}
+
+export interface OvertimeConfigurationPayload {
+  name?: string;
+  type?: OvertimeType;
+  fixedAmount?: number | null;
+  weekdayMultiplier?: number | null;
+  weekendMultiplier?: number | null;
+  isActive?: boolean;
+}
+
+export async function getOvertimeConfigurations() {
+  return request<OvertimeConfigurationItem[]>('/overtime-configurations');
+}
+
+export async function createOvertimeConfiguration(payload: OvertimeConfigurationPayload) {
+  return request<OvertimeConfigurationItem>('/overtime-configurations', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateOvertimeConfiguration(id: number, payload: OvertimeConfigurationPayload) {
+  return request<OvertimeConfigurationItem>(`/overtime-configurations/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
 /* -------------------------------------------------------------- system configurations (System Admin only) */
 
 export interface SystemConfigurationItem {

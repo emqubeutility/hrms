@@ -13,6 +13,7 @@ const TABS = [
   ['documents', 'Documents'],
   ['education', 'Education & Experience'],
   ['access', 'System Access'],
+  ['airfare', 'AirFare'],
 ];
 const TYPES = ['Text', 'Textarea', 'Number', 'Decimal', 'Date', 'Dropdown', 'Multi-select', 'Radio', 'Checkbox', 'Email', 'Phone', 'URL', 'Yes/No'];
 const OPTIONS_REQUIRED = ['Dropdown', 'Multi-select', 'Radio'];

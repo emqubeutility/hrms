@@ -879,6 +879,26 @@ model SalaryTemplate {
   @@map("salary_templates")
 }
 
+/// NEW — Administration > Attendance setup > Overtime. Admin-defined OT rule that is assigned to an
+/// employee in the Attendance section of the profile (value = id, optional amount override in the
+/// same section). Payroll reads these rules later; this table only holds the rule.
+/// type: FIXED_PER_DAY (fixedAmount for each weekend/holiday worked) | FIXED_MONTHLY (fixedAmount
+/// once a month) | HOURLY (OT hours x hourly rate x weekdayMultiplier and/or weekendMultiplier).
+model OvertimeConfiguration {
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique
+  type               String
+  fixedAmount        Decimal? @db.Decimal(12, 2)
+  weekdayMultiplier  Decimal? @db.Decimal(6, 3)
+  weekendMultiplier  Decimal? @db.Decimal(6, 3)
+  isActive           Boolean  @default(true)
+  createdByProfileId Int?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("overtime_configurations")
+}
+
 /// NEW — System Admin > Country Configuration (planning/system_application_module.md §D).
 /// `isoCode` is the same string used as `countryCode` on CustomFieldDefinition/SalaryTemplate
 /// ("ALL" there is a sentinel meaning "every country", not a row here).

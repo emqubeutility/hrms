@@ -6,8 +6,9 @@ import HolidayCalendarsPanel from '../components/attendance/HolidayCalendarsPane
 import RostersPanel from '../components/attendance/RostersPanel';
 import AssignmentsPanel from '../components/attendance/AssignmentsPanel';
 import ShiftsPanel from '../components/attendance/ShiftsPanel';
+import OvertimePanel from '../components/attendance/OvertimePanel';
 
-type Tab = 'shifts' | 'schedules' | 'weeklyoff' | 'holidays' | 'roster' | 'assignments';
+type Tab = 'shifts' | 'schedules' | 'weeklyoff' | 'holidays' | 'roster' | 'assignments' | 'overtime';
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: 'shifts', label: 'Shifts', hint: 'Work shifts with timing and grace rules' },
@@ -16,6 +17,7 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: 'holidays', label: 'Holiday calendars', hint: 'Holidays by company, country or branch, and their order' },
   { key: 'roster', label: 'Roster', hint: 'Repeating shift patterns and Excel import' },
   { key: 'assignments', label: 'Assignments', hint: 'Give employees a schedule, roster and calendar' },
+  { key: 'overtime', label: 'Overtime', hint: 'OT rules to assign to employees' },
 ];
 
 /** Administration > Attendance setup: everything attendance reads from, in one place. */
@@ -63,6 +65,7 @@ export default function AttendanceSetupPage() {
       {tab === 'holidays' && <HolidayCalendarsPanel />}
       {tab === 'roster' && <RostersPanel />}
       {tab === 'assignments' && <AssignmentsPanel />}
+      {tab === 'overtime' && <OvertimePanel />}
     </div>
   );
 }

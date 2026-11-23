@@ -21,7 +21,7 @@ export class BulkUpdateService {
   /** Every option list the bulk fields can use, from the same masters the profile form uses. */
   private async optionLists(user: CurrentUserPayload): Promise<Record<string, Option[]>> {
     const parameterTypes = [...new Set(BULK_FIELDS.map((f) => (typeof f.source === 'object' ? f.source.parameter : null)).filter((x): x is string => !!x))];
-    const [branches, shifts, employees, params, weeklyOffs] = await Promise.all([
+    const [branches, shifts, employees, params, weeklyOffs, overtimeConfigs] = await Promise.all([
       this.prisma.branch.findMany({ where: { isActive: true, ...(user.branchAccess ? { id: { in: user.branchAccess } } : {}) }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true } }),
       this.prisma.shift.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       this.prisma.employee.findMany({
@@ -31,6 +31,7 @@ export class BulkUpdateService {
       }),
       this.prisma.parameter.findMany({ where: { isVisible: true, parameterType: { name: { in: parameterTypes } } }, orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }], select: { text: true, parameterType: { select: { name: true } } } }),
       this.prisma.weeklyOffTemplate.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
+      this.prisma.overtimeConfiguration.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
     const out: Record<string, Option[]> = {};
     for (const f of BULK_FIELDS) {
@@ -38,6 +39,7 @@ export class BulkUpdateService {
       else if (f.source === 'branches') out[f.key] = branches.map((b) => ({ value: String(b.id), label: b.name }));
       else if (f.source === 'weeklyOffs') out[f.key] = weeklyOffs.map((w) => ({ value: w.name, label: w.name }));
       else if (f.source === 'shifts') out[f.key] = shifts.map((s) => ({ value: String(s.id), label: s.name }));
+      else if (f.source === 'overtimeConfigurations') out[f.key] = overtimeConfigs.map((c) => ({ value: String(c.id), label: c.name }));
       else if (f.source === 'employees') out[f.key] = employees.map((e) => ({ value: String(e.id), label: `${fullName(e.profile)} (${e.employeeCode})` }));
       else if (typeof f.source === 'object') out[f.key] = params.filter((p) => p.parameterType.name === (f.source as { parameter: string }).parameter).map((p) => ({ value: p.text, label: p.text }));
     }
