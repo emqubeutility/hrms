@@ -27,7 +27,10 @@ export class LeaveController {
   @Get('types')
   async types(@Query('scope') scope: string | undefined, @CurrentUser() u: CurrentUserPayload) {
     const country = scope === 'mine' ? await this.service.myCountry(u) : undefined;
-    return ok(await this.config.types(true, country), 'Leave types retrieved');
+    const types = await this.config.types(true, country);
+    if (scope !== 'mine') return ok(types, 'Leave types retrieved');
+    const locked = await this.service.myLockedTypeIds(u);
+    return ok(types.filter((t: { id: number }) => !locked.has(t.id)), 'Leave types retrieved');
   }
 
   @Get('balances')

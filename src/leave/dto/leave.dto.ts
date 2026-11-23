@@ -35,6 +35,7 @@ export class LeaveTypeDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(120) eventWindowMonths?: number | null;
   @IsOptional() @IsString() @MaxLength(60) eventLabel?: string | null;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100) payPercent?: number;
+  @IsOptional() @IsArray() @Type(() => Number) @IsInt({ each: true }) unlockAfterTypeIds?: number[];
   /** Month (1-12) this type's calendar starts in; empty = the company leave year. */
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(12) calendarStartMonth?: number | null;
   @IsBoolean() isCompOff: boolean;

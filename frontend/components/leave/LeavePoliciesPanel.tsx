@@ -113,7 +113,7 @@ export default function LeavePoliciesPanel() {
                 <td className="px-4 py-3 font-mono text-[13px] text-gray-700">{p.effectiveFrom} → {p.effectiveTo ?? 'open'}</td>
                 <td className="px-4 py-3 text-gray-700">{p.rules.map((r) => `${r.leaveType} ${r.annualDays}`).join(', ')}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
-                  <button type="button" onClick={() => setEditing({ id: p.id, used: p.used, form: { name: p.name, layer: p.layer, countryCode: p.countryCode, branchId: p.branchId, employeeTypeId: p.employeeTypeId, employeeId: p.employeeId, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo, priority: p.priority, isActive: p.isActive, note: p.note, rules: p.rules } })} className="text-sm font-medium text-blue-600 hover:text-blue-800">{p.used ? 'View / end' : 'Edit'}</button>
+                  <button type="button" onClick={() => setEditing({ id: p.id, used: p.used, form: { name: p.name, layer: p.layer, countryCode: p.countryCode, branchId: p.branchId, employeeTypeId: p.employeeTypeId, employeeId: p.employeeId, effectiveFrom: p.effectiveFrom, effectiveTo: p.effectiveTo, priority: p.priority, isActive: p.isActive, note: p.note, rules: p.rules.map(({ id: _id, leaveType: _name, ...r }: any) => r) } })} className="text-sm font-medium text-blue-600 hover:text-blue-800">{p.used ? 'View / end' : 'Edit'}</button>
                   {!p.used && <button type="button" onClick={() => remove(p)} className="ml-3 text-sm text-red-600 hover:text-red-800">Delete</button>}
                 </td>
               </tr>

@@ -1495,6 +1495,8 @@ model LeaveType {
   eventLabel         String?
   /// Share of salary paid while on this leave (100 full, 50 half, 0 unpaid). Recorded for payroll.
   payPercent         Int      @default(100)
+  /// Leave types (ids) whose balance must be used up before this one is shown or can be applied for (for example medical leave steps).
+  unlockAfterTypeIds Int[]    @default([])
   /// Month (1-12) this leave type's calendar starts in; it ends the month before. Empty = the company leave year.
   calendarStartMonth Int?
   /// Earned through comp off credits instead of accrual.

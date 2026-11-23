@@ -76,6 +76,13 @@ const RULES = {
   }
   const policy = (await p.leavePolicy.findFirst({ where: { name: 'UAE statutory', countryCode: 'AE' } })) ??
     (await p.leavePolicy.create({ data: { name: 'UAE statutory', layer: 'STATUTORY', countryCode: 'AE', effectiveFrom: new Date('2020-01-01'), note: 'UAE Labour Law leave entitlements' } }));
+  // The medical steps: half pay only once both full-pay types are used up, unpaid only once half pay is used up.
+  await p.leaveType.update({ where: { code: 'ML-HALF' }, data: { unlockAfterTypeIds: [ids['ML-CERT'], ids['ML-NOCERT']] } });
+  await p.leaveType.update({ where: { code: 'ML-UNPAID' }, data: { unlockAfterTypeIds: [ids['ML-HALF']] } });
+  // Maternity steps: half paid after paid is used up, unpaid after half paid; baby sick unpaid after baby sick paid.
+  await p.leaveType.update({ where: { code: 'MAT-HALF' }, data: { unlockAfterTypeIds: [ids['MAT']] } });
+  await p.leaveType.update({ where: { code: 'MAT-UNPAID' }, data: { unlockAfterTypeIds: [ids['MAT-HALF']] } });
+  await p.leaveType.update({ where: { code: 'MAT-SICK-UNPAID' }, data: { unlockAfterTypeIds: [ids['MAT-SICK-PAID']] } });
   for (const [code, r] of Object.entries(RULES)) {
     const d = { creditMethod: r.creditMethod, annualDays: r.annualDays, slabs: r.slabs ?? [], slabTiming: r.slabTiming ?? 'IMMEDIATE', proration: r.proration ?? 'NONE', serviceBasis: r.serviceBasis ?? 'JOINING_DATE', rounding: 'NONE', formula: r.formula ?? null };
     await p.leavePolicyRule.upsert({ where: { policyId_leaveTypeId: { policyId: policy.id, leaveTypeId: ids[code] } }, create: { policyId: policy.id, leaveTypeId: ids[code], ...d }, update: d });

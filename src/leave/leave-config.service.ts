@@ -87,6 +87,7 @@ export class LeaveConfigService {
       eventWindowMonths: dto.eventWindowMonths ?? null,
       eventLabel: dto.eventWindowMonths ? dto.eventLabel?.trim() || 'Event date' : null,
       payPercent: dto.payPercent ?? (dto.isPaid ? 100 : 0),
+      unlockAfterTypeIds: [...new Set(dto.unlockAfterTypeIds ?? [])],
       calendarStartMonth: dto.calendarStartMonth ?? null,
       isCompOff: dto.isCompOff,
       isActive: dto.isActive ?? true,

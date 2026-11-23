@@ -10,7 +10,7 @@ import LeavePoliciesPanel from '../leave/LeavePoliciesPanel';
 
 const blankType: LeaveTypePayload = {
   code: '', name: '', isPaid: true, balanceTracking: true, accrual: 'NONE', annualDays: 0, allowHalfDay: true, allowNegative: false,
-  requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, requiresApproval: true, isEncashable: false, excludeWeeklyOffs: true, excludeHolidays: true, resetBalance: true, carryForwardType: 'NONE', carryForwardRules: [], genderRestriction: null, maxTimesInService: null, eventWindowMonths: null, eventLabel: null, payPercent: 100, calendarStartMonth: 1, isCompOff: false, isActive: true,
+  requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, requiresApproval: true, isEncashable: false, excludeWeeklyOffs: true, excludeHolidays: true, resetBalance: true, carryForwardType: 'NONE', carryForwardRules: [], genderRestriction: null, maxTimesInService: null, eventWindowMonths: null, eventLabel: null, payPercent: 100, unlockAfterTypeIds: [], calendarStartMonth: 1, isCompOff: false, isActive: true,
   countryCodes: [],
 };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -362,6 +362,10 @@ export default function LeaveConfigPanel() {
               <label className="block text-sm font-medium text-gray-700">Must be taken within (months)<input type="number" min="1" placeholder="No limit" className={fieldClass} value={editing.form.eventWindowMonths ?? ''} onChange={(e) => setF({ eventWindowMonths: e.target.value ? Number(e.target.value) : null })} /></label>
               <label className="block text-sm font-medium text-gray-700">…of this date<input disabled={!editing.form.eventWindowMonths} className={fieldClass} placeholder="Child's date of birth" value={editing.form.eventLabel ?? ''} onChange={(e) => setF({ eventLabel: e.target.value || null })} /></label>
               <label className="block text-sm font-medium text-gray-700">Salary paid (%)<input type="number" min="0" max="100" className={fieldClass} value={editing.form.payPercent} onChange={(e) => setF({ payPercent: Number(e.target.value) })} /></label>
+              <label className="col-span-2 block text-sm font-medium text-gray-700">Available only after these are used up
+                <Select multiple className={fieldClass} values={(editing.form.unlockAfterTypeIds ?? []).map(String)} onValuesChange={(v) => setF({ unlockAfterTypeIds: v.map(Number) })} options={types.filter((t) => t.balanceTracking && t.id !== editing.id).map((t) => ({ value: String(t.id), label: t.name }))} allText="Always available" noun="leave types" placeholder="Always available" />
+                <span className="mt-1 block text-xs text-gray-500">The employee sees this leave type only when the balance of every chosen type is zero (for example half-pay medical leave after the full-pay medical leave).</span>
+              </label>
               <p className="col-span-2 -mt-2 text-xs text-gray-500">100 is full pay, 50 half pay, 0 unpaid. It is kept for payroll; nothing pays it out yet.</p>
             </div>
           </Group>

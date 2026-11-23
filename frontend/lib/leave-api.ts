@@ -27,6 +27,8 @@ export interface LeaveType {
   eventWindowMonths: number | null;
   eventLabel: string | null;
   payPercent: number;
+  /** Leave type ids whose balance must be used up before this one is available. */
+  unlockAfterTypeIds: number[];
   /** Month (1-12) this type's calendar starts in; null = the company leave year. */
   calendarStartMonth: number | null;
   isCompOff: boolean;

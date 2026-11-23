@@ -121,9 +121,15 @@ export class LeaveService {
     return out;
   }
 
+  /** Leave types the caller cannot use yet (an earlier step still has days left). */
+  async myLockedTypeIds(user: CurrentUserPayload): Promise<Set<number>> {
+    return this.lockedTypeIds(await this.myEmployeeId(user));
+  }
+
   async myBalances(user: CurrentUserPayload) {
     const employeeId = await this.myEmployeeId(user);
-    const rows = await this.balances(employeeId);
+    const locked = await this.lockedTypeIds(employeeId);
+    const rows = (await this.balances(employeeId)).filter((r) => !locked.has(r.leaveTypeId));
     const country = await this.myCountry(user);
     if (!country) return rows;
     // Hide a type that does not apply to this country, unless the employee actually holds (or is waiting on) days of it.
@@ -159,8 +165,33 @@ export class LeaveService {
     return { type, result, noRoster, from, to, halfDay };
   }
 
+  /** The name of the first of these leave types that still has days left for the employee, or null when all are used up. */
+  private async firstUnexhausted(employeeId: number, typeIds: number[]): Promise<string | null> {
+    const types = await this.prisma.leaveType.findMany({ where: { id: { in: typeIds } }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, balanceTracking: true } });
+    for (const t of types) {
+      if (!t.balanceTracking) continue;
+      // A step that was never credited to this person has not been used up either, so the next step stays locked.
+      if ((await this.prisma.leaveCredit.count({ where: { employeeId, leaveTypeId: t.id } })) === 0) return t.name;
+      if ((await this.available(employeeId, t.id)) > 0) return t.name;
+    }
+    return null;
+  }
+
+  /** Leave types this employee cannot use yet because an earlier step still has days left. */
+  async lockedTypeIds(employeeId: number): Promise<Set<number>> {
+    const locked = new Set<number>();
+    for (const t of await this.prisma.leaveType.findMany({ where: { isActive: true, unlockAfterTypeIds: { isEmpty: false } }, select: { id: true, unlockAfterTypeIds: true } })) {
+      if (await this.firstUnexhausted(employeeId, t.unlockAfterTypeIds)) locked.add(t.id);
+    }
+    return locked;
+  }
+
   /** The conditions a leave type puts on who can take it and when (gender, times in service, event window). */
-  private async checkConditions(employeeId: number, type: { id: number; name: string; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
+  private async checkConditions(employeeId: number, type: { id: number; name: string; unlockAfterTypeIds: number[]; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
+    if (type.unlockAfterTypeIds.length) {
+      const first = await this.firstUnexhausted(employeeId, type.unlockAfterTypeIds);
+      if (first) throw new BadRequestException(`${type.name} can be used only after ${first} is used up`);
+    }
     if (type.genderRestriction) {
       const p = await this.prisma.employeeProfileSection.findUnique({ where: { employeeId_sectionKey: { employeeId, sectionKey: 'personal' } }, select: { data: true } });
       const gender = (p?.data as { gender?: unknown } | null)?.gender;
