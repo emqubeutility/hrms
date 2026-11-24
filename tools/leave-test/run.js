@@ -249,7 +249,8 @@ const { NestFactory } = require('@nestjs/core');
       const d = day();
       const none = await fails(apply(male, 'BRV', d, d), /Choose the relationship/);
       check('BRV: asks for the relationship', none.ok, none.msg);
-      const six = await fails(apply(male, 'BRV', d, plus(d, 6), { variant: 'Spouse' }), /at most 5/);
+      const six = await fails(apply(male, 'BRV', d, plus(d, 8), { variant: 'Spouse' }), /at most 5/);
+      // 9 calendar days (Tue to the Wed after next) is 7 working days once the weekend is skipped
       check('BRV: spouse above 5 days is refused', six.ok, six.msg);
       const four = await fails(apply(male, 'BRV', d, plus(d, 4), { variant: 'Parent, child, sibling, grandchild or grandparent' }), /at most 3/);
       check('BRV: parent / child above 3 days is refused', four.ok, four.msg);
