@@ -177,10 +177,10 @@ export default function MyLeavePage() {
           title={editingId !== null ? 'Edit leave request' : 'Apply for leave'}
           subtitle={editingId !== null ? 'Change the type, dates or reason. It stays waiting for approval.' : 'Choose the type and dates. The days are counted for you before you send it.'}
           busy={busy}
-          onClose={() => setApplying(false)}
+          onClose={() => { setApplying(false); setError(''); }}
           footer={
             <>
-              <button type="button" onClick={() => setApplying(false)} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={() => { setApplying(false); setError(''); }} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
               <button type="button" onClick={submit} disabled={busy || !preview || !preview.enough} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving…' : editingId !== null ? 'Save changes' : preview && preview.requiresApproval === false ? 'Apply' : 'Send for approval'}</button>
             </>
           }

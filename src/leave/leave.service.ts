@@ -241,7 +241,7 @@ export class LeaveService {
     const available = type.balanceTracking ? await this.available(employeeId, type.id) : null;
     const warnings: string[] = [];
     if (noRoster) warnings.push('You have no roster assigned, so every day is counted as a working day. Ask HR to assign your roster.');
-    if (type.requiresDocument && result.totalDays > type.documentAfterDays) warnings.push(`${type.name} over ${type.documentAfterDays} day(s) needs a supporting document. Give it to HR.`);
+    if (type.requiresDocument && result.totalDays > type.documentAfterDays) warnings.push(type.documentAfterDays > 0 ? `${type.name} over ${type.documentAfterDays} day(s) needs a supporting document. Attach it below before you send.` : `${type.name} needs a supporting document. Attach it below before you send.`);
     const enough = !type.balanceTracking || type.allowNegative || (available ?? 0) >= result.totalDays;
     return { ...result, leaveType: { id: type.id, name: type.name, isPaid: type.isPaid }, requiresApproval: type.requiresApproval, available, enough, warnings };
   }
