@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
+import { useToast } from '../../lib/toast';
 import { Employee, getEmployees } from '../../lib/api';
 import { AttendanceRow, AttendanceStatus, editAttendance, getStatuses, getTeamAttendance, minutesText } from '../../lib/attendance-marking-api';
 import { UserType } from '../../lib/user-types';
@@ -49,7 +50,11 @@ export default function TeamAttendancePage() {
   const [onlyCompOff, setOnlyCompOff] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const toast = useToast();
+  /** Messages with real detail (counts, comp off) appear as toasts. */
+  const setNotice = (m: string) => {
+    if (m) toast.success(m);
+  };
   const [edit, setEdit] = useState<Target | null>(null);
   const [saving, setSaving] = useState(false);
   const [empSearch, setEmpSearch] = useState('');
@@ -218,7 +223,6 @@ export default function TeamAttendancePage() {
       </div>
 
       {error && !edit && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-      {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-200 text-sm">

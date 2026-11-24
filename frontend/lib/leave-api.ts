@@ -199,18 +199,19 @@ export const getGroupCount = (t: GroupTarget) =>
   request<{ count: number }>(`/leave/adjust-group/count?scope=${t.scope}${t.branchId ? `&branchId=${t.branchId}` : ''}${t.siteId ? `&siteId=${t.siteId}` : ''}${t.countryCode ? `&countryCode=${encodeURIComponent(t.countryCode)}` : ''}`);
 export const adjustGroup = (p: GroupTarget & { leaveTypeId: number; days: number; note: string; expiresOn?: string }) =>
   request<{ total: number; done: number; failed: { employeeId: number; code: string; reason: string }[] }>('/leave/adjust-group', { method: 'POST', silent: true, body: json(p) });
-export const adjustBalance = (p: { employeeId: number; leaveTypeId: number; days: number; note: string; expiresOn?: string }) => request<LeaveBalance[]>('/leave/adjust', { method: 'POST', body: json(p) });
+export const adjustBalance = (p: { employeeId: number; leaveTypeId: number; days: number; note: string; expiresOn?: string }) => request<LeaveBalance[]>('/leave/adjust', { method: 'POST', silent: true, body: json(p) });
 export const runAccrual = (asOf?: string) => request<{ asOf: string; leaveYear: string; credited: number; alreadyCredited: number }>('/leave/accrual', { method: 'POST', body: json({ asOf }), silent: true });
 export const syncCompOff = () => request<{ granted: number }>('/leave/comp-off/sync', { method: 'POST', silent: true });
 
 export const getLeaveConfig = () => request<{ types: LeaveType[]; settings: LeaveSettings }>('/leave-config');
-export const createLeaveType = (p: LeaveTypePayload) => request<LeaveType>('/leave-config/types', { method: 'POST', body: json(p) });
-export const deleteLeaveType = (id: number) => request<null>(`/leave-config/types/${id}`, { method: 'DELETE' });
-export const updateLeaveType = (id: number, p: LeaveTypePayload) => request<LeaveType>(`/leave-config/types/${id}`, { method: 'PUT', body: json(p) });
+export const createLeaveType = (p: LeaveTypePayload) => request<LeaveType>('/leave-config/types', { method: 'POST', silent: true, body: json(p) });
+export const deleteLeaveType = (id: number) => request<null>(`/leave-config/types/${id}`, { method: 'DELETE', silent: true });
+export const updateLeaveType = (id: number, p: LeaveTypePayload) => request<LeaveType>(`/leave-config/types/${id}`, { method: 'PUT', silent: true, body: json(p) });
 export const saveLeaveSettings = (p: LeaveSettings) => {
   const { sandwichEnabled, sandwichWeeklyOffs, sandwichHolidays, sandwichRequireBothSides, leaveYearStartMonth, compOffEnabled, compOffCreditDays, compOffExpiryDays, compOffMinWorkedMinutes } = p;
   return request<LeaveSettings>('/leave-config/settings', {
     method: 'PUT',
+    silent: true, // the page says "Settings saved"
     body: json({ sandwichEnabled, sandwichWeeklyOffs, sandwichHolidays, sandwichRequireBothSides, leaveYearStartMonth, compOffEnabled, compOffCreditDays, compOffExpiryDays, compOffMinWorkedMinutes }),
   });
 };

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
+import { useToast } from '../../lib/toast';
 import { BranchOption, CountryItem, MasterItem, getBranches, getCountries, getSites } from '../../lib/api';
 import { searchEmployeeOptions } from '../../lib/bulk-api';
 import { GroupTarget, LeaveBalance, LeaveType, LedgerRow, adjustBalance, adjustGroup, fmtDays, getBalancesOf, getGroupCount, getLeaveTypes, getLedger } from '../../lib/leave-api';
@@ -26,7 +27,11 @@ export default function LeaveBalancesPanel() {
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [adj, setAdj] = useState({ leaveTypeId: '', days: '', note: '', expiresOn: '' });
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const toast = useToast();
+  /** Messages with real detail (counts, comp off) appear as toasts. */
+  const setNotice = (m: string) => {
+    if (m) toast.success(m);
+  };
   const [saving, setSaving] = useState(false);
 
   // One employee chosen: show their balances and ledger. Several: only the add / take away form.
@@ -149,8 +154,7 @@ export default function LeaveBalancesPanel() {
             </div>
           )}
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-          {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
-          {!target ? (
+              {!target ? (
             <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">{level === 'BRANCH' ? 'Choose a branch.' : level === 'SITE' ? 'Choose a site.' : 'Choose a country.'}</p>
           ) : (
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -187,7 +191,6 @@ export default function LeaveBalancesPanel() {
       </div>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-      {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
 
       {picked.length === 0 ? (
         <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Choose an employee.</p>

@@ -798,12 +798,12 @@ export interface EmployeeLoginResult {
 
 /** Creates the login from System Access (temporary password). Says so if the employee already has one. */
 export async function createEmployeeLogin(id: number) {
-  return request<EmployeeLoginResult>(`/employees/${id}/login`, { method: 'POST' });
+  return request<EmployeeLoginResult>(`/employees/${id}/login`, { method: 'POST', silent: true });
 }
 
 /** Sets a new temporary password and emails the login details to the employee. */
 export async function sendEmployeeLoginDetails(id: number) {
-  return request<{ sentTo: string }>(`/employees/${id}/login/send`, { method: 'POST' });
+  return request<{ sentTo: string }>(`/employees/${id}/login/send`, { method: 'POST', silent: true });
 }
 
 export async function saveEmployeeProfileSection(
@@ -814,6 +814,7 @@ export async function saveEmployeeProfileSection(
 ) {
   return request<{ section: string; values: Record<string, any> }>(`/employees/${id}/profile/${section}`, {
     method: 'PUT',
+    silent: true, // the profile page shows its own message
     body: JSON.stringify({ data, custom }),
   });
 }
