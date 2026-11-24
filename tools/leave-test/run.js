@@ -129,6 +129,42 @@ const { NestFactory } = require('@nestjs/core');
       await p.leaveCredit.updateMany({ where: { employeeId: male.id, leaveTypeId: T['ML-HALF'].id }, data: { remaining: 0 } });
       check('ML-UNPAID shows once half pay is used up', !(await L.lockedTypeIds(male.id)).has(T['ML-UNPAID'].id));
     }
+    // 5b Medical steps by really using the days (apply + approve), not by editing balances
+    {
+      const doc = { buffer: Buffer.from('%PDF-1.4 test'), originalname: 'cert.pdf', mimetype: 'application/pdf', size: 13 };
+      await credit(female, 'ML-CERT', 2);
+      await credit(female, 'ML-NOCERT', 1);
+      await credit(female, 'ML-HALF', 3);
+      await credit(female, 'ML-UNPAID', 2);
+      const take = async (code, needsDoc = true) => {
+        const d = day();
+        const a = await apply(female, code, d, d);
+        if (needsDoc) await L.attach(female.user, a.id, doc);
+        await L.decide(hr.user, a.id, true, undefined);
+        return a;
+      };
+      const hidden = async () => [...(await L.lockedTypeIds(female.id))].map((id) => Object.values(T).find((t) => t.id === id).code).filter((c) => c.startsWith('ML-'));
+      check('Medical (real use): at the start Half Pay and Unpaid are hidden', (await hidden()).sort().join() === 'ML-HALF,ML-UNPAID', (await hidden()).join());
+      await take('ML-CERT');
+      check('Medical (real use): With Certificate 2 -> 1 left, still hidden', (await bal(female, 'ML-CERT')).balance === 1 && (await hidden()).includes('ML-HALF'));
+      await take('ML-CERT');
+      check('Medical (real use): With Certificate used up, Without Certificate still has a day, so Half Pay stays hidden', (await bal(female, 'ML-CERT')).balance === 0 && (await hidden()).includes('ML-HALF'));
+      await take('ML-NOCERT', false);
+      check('Medical (real use): both used up -> Half Pay appears, Unpaid still hidden', (await bal(female, 'ML-NOCERT')).balance === 0 && !(await hidden()).includes('ML-HALF') && (await hidden()).includes('ML-UNPAID'), (await hidden()).join());
+      await take('ML-HALF');
+      check('Medical (real use): Half Pay can be taken and takes a day (3 -> 2)', (await bal(female, 'ML-HALF')).balance === 2);
+      check('Medical (real use): Unpaid stays hidden while Half Pay has days', (await hidden()).includes('ML-UNPAID'));
+      await take('ML-HALF');
+      await take('ML-HALF');
+      check('Medical (real use): Half Pay used up -> Unpaid appears', (await bal(female, 'ML-HALF')).balance === 0 && !(await hidden()).includes('ML-UNPAID'));
+      await take('ML-UNPAID');
+      check('Medical (real use): Unpaid can be taken (2 -> 1)', (await bal(female, 'ML-UNPAID')).balance === 1);
+      // a pending request already counts as using the day
+      const d = day();
+      await credit(female, 'ML-NOCERT', 1);
+      const stillLocked = (await hidden()).includes('ML-HALF');
+      check('Medical (real use): a new Without Certificate day hides Half Pay again', stillLocked);
+    }
     // 6 Half day, LOP, emergency
     {
       const d = day();
