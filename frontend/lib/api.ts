@@ -51,6 +51,7 @@ export interface User {
   profile: {
     id: number;
     name: string;
+    middleName?: string | null;
     lastName?: string;
     email?: string;
     contactNo?: string;
@@ -767,6 +768,23 @@ export interface FieldErrorItem {
 
 export async function getEmployeeProfile(id: number) {
   return request<EmployeeProfileResponse>(`/employees/${id}/profile`);
+}
+
+export interface EmployeeLoginResult {
+  created: boolean;
+  username: string;
+  /** Only when the login was just created; shown once. */
+  temporaryPassword?: string | null;
+}
+
+/** Creates the login from System Access (temporary password). Says so if the employee already has one. */
+export async function createEmployeeLogin(id: number) {
+  return request<EmployeeLoginResult>(`/employees/${id}/login`, { method: 'POST' });
+}
+
+/** Sets a new temporary password and emails the login details to the employee. */
+export async function sendEmployeeLoginDetails(id: number) {
+  return request<{ sentTo: string }>(`/employees/${id}/login/send`, { method: 'POST' });
 }
 
 export async function saveEmployeeProfileSection(

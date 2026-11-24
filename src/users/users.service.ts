@@ -89,13 +89,19 @@ export class UsersService {
     if (query.isActive !== undefined) where.isActive = query.isActive;
     if (query.search) {
       const term = query.search.trim();
-      where.profile = {
-        OR: [
-          { name: { contains: term, mode: 'insensitive' } },
-          { lastName: { contains: term, mode: 'insensitive' } },
-          { email: { contains: term, mode: 'insensitive' } },
-        ],
-      };
+      where.OR = [
+        { username: { contains: term, mode: 'insensitive' } },
+        {
+          profile: {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { middleName: { contains: term, mode: 'insensitive' } },
+              { lastName: { contains: term, mode: 'insensitive' } },
+              { email: { contains: term, mode: 'insensitive' } },
+            ],
+          },
+        },
+      ];
     }
 
     const [totalItems, items] = await Promise.all([

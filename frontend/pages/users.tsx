@@ -16,6 +16,7 @@ import {
 import BranchAccessPicker from '../components/BranchAccessPicker';
 import { UserType } from '../lib/user-types';
 import Select from '../components/Select';
+import Pagination from '../components/Pagination';
 import Modal from '../components/Modal';
 
 export default function UsersPage() {
@@ -25,7 +26,12 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [search, setSearch] = useState('');
+  // The search as sent to the server: waits until typing pauses.
+  const [query, setQuery] = useState('');
+  const [userTypeFilter, setUserTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -57,19 +63,29 @@ export default function UsersPage() {
   });
 
   useEffect(() => {
+    const t = setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
     if (!isAuthenticated) return;
     loadUsers();
     getUserTypes().then((res) => setUserTypes(res.data));
     getLoginCandidates().then((res) => setCandidates(res.data)).catch(() => {});
     if (isSystemAdmin) getBranches().then((res) => setBranchOptions(res.data)).catch(() => {});
-  }, [isAuthenticated, isSystemAdmin, page, search]);
+  }, [isAuthenticated, isSystemAdmin, page, pageSize, query, userTypeFilter, statusFilter]);
 
   const loadUsers = async () => {
     setLoading(true);
     setError('');
     try {
-      const params: any = { page };
-      if (search) params.search = search;
+      const params: any = { page, pageSize };
+      if (query) params.search = query;
+      if (userTypeFilter) params.userTypeId = Number(userTypeFilter);
+      if (statusFilter) params.isActive = statusFilter === 'active';
       const res = await getUsers(params);
       setUsers(res.data);
       setPagination(res.pagination);
@@ -183,27 +199,56 @@ export default function UsersPage() {
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
       )}
 
-      <div className="flex gap-4">
-        <input
-          type="text"
-          placeholder="Search users..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && setPage(1)}
-          className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-        />
-        <button
-          onClick={() => setPage(1)}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition"
-        >
-          Search
-        </button>
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <label className="text-xs font-medium text-gray-600">
+          Name
+          <input
+            type="search"
+            placeholder="Name, username or email"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="mt-1.5 block w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </label>
+        <label className="w-48 text-xs font-medium text-gray-600">
+          User type
+          <select
+            value={userTypeFilter}
+            onChange={(e) => { setUserTypeFilter(e.target.value); setPage(1); }}
+            className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All types</option>
+            {userTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+        <label className="w-40 text-xs font-medium text-gray-600">
+          Status
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        {(search || userTypeFilter || statusFilter) && (
+          <button
+            type="button"
+            onClick={() => { setSearch(''); setUserTypeFilter(''); setStatusFilter(''); setPage(1); }}
+            className="pb-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
+              <th className="px-6 py-3 font-semibold text-gray-700">Name</th>
               <th className="px-6 py-3 font-semibold text-gray-700">Username</th>
               <th className="px-6 py-3 font-semibold text-gray-700">User Type</th>
               <th className="px-6 py-3 font-semibold text-gray-700">Status</th>
@@ -213,13 +258,13 @@ export default function UsersPage() {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
                   Loading...
                 </td>
               </tr>
             ) : users.length === 0 && pending.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
                   No users found.
                 </td>
               </tr>
@@ -228,6 +273,7 @@ export default function UsersPage() {
               {pending.map((c) => (
                 <tr key={`p${c.profileId}`} className="bg-amber-50/50 hover:bg-amber-50">
                   <td className="px-6 py-4 font-medium text-gray-900">{c.name} <span className="text-xs font-normal text-gray-400">{c.code}</span></td>
+                  <td className="px-6 py-4 text-gray-400">—</td>
                   <td className="px-6 py-4 text-gray-500">{c.accessRole ?? '—'}</td>
                   <td className="px-6 py-4"><span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Site access given, no login yet</span></td>
                   <td className="px-6 py-4 text-right"><button onClick={() => startFor(c)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Create login</button></td>
@@ -235,7 +281,10 @@ export default function UsersPage() {
               ))}
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-900">{u.username}</td>
+                  <td className="px-6 py-4 font-medium text-gray-900">
+                    {[u.profile?.name, u.profile?.middleName, u.profile?.lastName].filter(Boolean).join(' ') || '—'}
+                  </td>
+                  <td className="px-6 py-4 text-gray-600">{u.username}</td>
                   <td className="px-6 py-4 text-gray-600">{u.userType?.name}</td>
                   <td className="px-6 py-4">
                     <span
@@ -276,27 +325,9 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <div>
-            Page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} total)
-          </div>
-          <div className="flex gap-2">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage(page - 1)}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page >= pagination.totalPages}
-              onClick={() => setPage(page + 1)}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+      {pagination && (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Pagination page={page} pageSize={pageSize} total={pagination.totalItems} pageSizes={[25, 50, 100]} onPageChange={setPage} onPageSizeChange={(n) => { setPageSize(n); setPage(1); }} />
         </div>
       )}
 

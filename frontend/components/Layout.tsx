@@ -206,7 +206,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const userType = user?.userTypeId as UserType | undefined;
   const roleLabel = (userType && ROLE_LABEL[userType]) || 'User';
-  const displayName = user?.username ?? 'User';
+  const displayName = user?.fullName || user?.username || 'User';
 
   // Everything below "My Profile" is exactly what Menus & Rights grants this user; no role is hardcoded here.
   const rbacEntries = buildEntries(menu);

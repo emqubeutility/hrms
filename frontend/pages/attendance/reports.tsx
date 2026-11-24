@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { ExceptionKind, ExceptionRow, SummaryRow, downloadCsv, getAttendanceExceptions, getAttendanceSummary, minutesText } from '../../lib/attendance-marking-api';
 import StatusBadge from '../../components/StatusBadge';
+import Pagination from '../../components/Pagination';
+import { usePagedRows } from '../../lib/usePagedRows';
 
 type Kind = 'summary' | ExceptionKind;
 const REPORTS: { key: Kind; label: string; hint: string }[] = [
@@ -26,6 +28,8 @@ export default function AttendanceReportsPage() {
   const [to, setTo] = useState(last());
   const [summary, setSummary] = useState<{ statuses: { code: string; name: string; color: string }[]; rows: SummaryRow[]; truncated: boolean } | null>(null);
   const [rows, setRows] = useState<ExceptionRow[]>([]);
+  const summaryPaged = usePagedRows(summary?.rows ?? []);
+  const rowsPaged = usePagedRows(rows);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -86,7 +90,7 @@ export default function AttendanceReportsPage() {
               <tr><th className="px-4 py-3">Employee</th>{summary?.statuses.map((s) => <th key={s.code} className="px-3 py-3 text-center" title={s.name}><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} /><span className="ml-1 hidden xl:inline">{s.name}</span></th>)}<th className="px-3 py-3">Late</th><th className="px-3 py-3">Worked</th><th className="px-3 py-3">Short</th><th className="px-3 py-3">Overtime</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? <tr><td colSpan={20} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr> : !summary?.rows.length ? <tr><td colSpan={20} className="px-4 py-8 text-center text-gray-500">No attendance in this period.</td></tr> : summary.rows.map((r) => (
+              {loading ? <tr><td colSpan={20} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr> : !summary?.rows.length ? <tr><td colSpan={20} className="px-4 py-8 text-center text-gray-500">No attendance in this period.</td></tr> : summaryPaged.pageRows.map((r) => (
                 <tr key={r.employeeId}>
                   <td className="px-4 py-2 text-gray-900">{r.employeeName} <span className="text-xs text-gray-400">{r.employeeCode}</span>{r.pending > 0 && <span className="ml-2 text-xs text-amber-700">{r.pending} pending</span>}</td>
                   {summary.statuses.map((s) => <td key={s.code} className="px-3 py-2 text-center text-gray-700">{r.days[s.code] ?? <span className="text-gray-300">·</span>}</td>)}
@@ -104,7 +108,7 @@ export default function AttendanceReportsPage() {
               <tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">In</th><th className="px-4 py-3">Out</th><th className="px-4 py-3">Late</th><th className="px-4 py-3">Worked / required</th><th className="px-4 py-3">Short</th><th className="px-4 py-3">Overtime</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr> : rows.length === 0 ? <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">Nothing to report for this period.</td></tr> : rows.map((r, i) => (
+              {loading ? <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr> : rows.length === 0 ? <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">Nothing to report for this period.</td></tr> : rowsPaged.pageRows.map((r, i) => (
                 <tr key={`${r.employeeId}-${r.date}-${i}`}>
                   <td className="px-4 py-2 font-mono text-[13px] text-gray-800">{r.date}</td>
                   <td className="px-4 py-2 text-gray-900">{r.employeeName} <span className="text-xs text-gray-400">{r.employeeCode}</span></td>
@@ -120,6 +124,8 @@ export default function AttendanceReportsPage() {
             </tbody>
           </table>
         )}
+        {kind === 'summary' && !!summary?.rows.length && <Pagination {...summaryPaged.pagination} />}
+        {kind !== 'summary' && rows.length > 0 && <Pagination {...rowsPaged.pagination} />}
       </div>
     </div>
   );

@@ -4,6 +4,10 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { getEmployees, getSites, getParameters, Employee } from '../lib/api';
 import Select from '../components/Select';
+import Pagination from '../components/Pagination';
+
+/** The server pages employees in these sizes only. */
+const SERVER_PAGE_SIZES = [25, 50, 100];
 
 type SortKey = 'name' | 'employeeCode' | 'dateOfJoining';
 type Option = { id: number; label: string };
@@ -237,25 +241,8 @@ export default function EmployeesPage() {
       </div>
 
       {pagination && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
-          <div>
-            {pagination.totalItems} employee{pagination.totalItems === 1 ? '' : 's'}
-            {pagination.totalPages > 1 && ` · Page ${pagination.page} of ${pagination.totalPages}`}
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2">
-              Rows
-              <Select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="px-2 py-1 border border-gray-300 rounded bg-white"
-              >
-                {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-              </Select>
-            </label>
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">Previous</button>
-            <button disabled={page >= pagination.totalPages} onClick={() => setPage(page + 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">Next</button>
-          </div>
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Pagination page={page} pageSize={pageSize} total={pagination.totalItems} pageSizes={SERVER_PAGE_SIZES} onPageChange={setPage} onPageSizeChange={(n) => { setPageSize(n); setPage(1); }} />
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../lib/auth';
+import { useToast } from '../../lib/toast';
 import EmployeePhoto from '../../components/EmployeePhoto';
 import EmployeeDocuments from '../../components/EmployeeDocuments';
 import EmployeeDependants from '../../components/EmployeeDependants';
@@ -14,6 +15,8 @@ import {
   getBlankProfile,
   getEmployeeProfile,
   saveEmployeeProfileSection,
+  createEmployeeLogin,
+  sendEmployeeLoginDetails,
   uploadEmployeePhoto,
   validateNewProfile,
 } from '../../lib/api';
@@ -256,6 +259,10 @@ export default function EmployeeProfilePage() {
   const [section, setSection] = useState('personal');
   const [errors, setErrors] = useState<FieldErrorItem[]>([]);
   const [notice, setNotice] = useState('');
+  // Login (System Access): the result of the last create or send, and the temporary password shown once.
+  const [loginNote, setLoginNote] = useState<{ tone: 'ok' | 'info' | 'warn'; text: string; password?: string | null } | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const toast = useToast();
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Record<string, string>>({});
@@ -319,6 +326,11 @@ export default function EmployeeProfilePage() {
   ];
   const current = sections.find((s) => s.key === section) ?? sections[0];
   const canEdit = !!data?.canEdit;
+  // Country options come from the Organization schema; currency follows the country (same mapping as the server).
+  const headerCountryOptions = (sections
+    .find((s) => s.key === 'organization')?.groups.flatMap((g) => g.fields ?? [])
+    .find((f) => f.key === 'legalEntityCountry')?.options ?? []) as string[];
+  const CURRENCY_BY_COUNTRY: Record<string, string> = { IN: 'INR', AE: 'AED', GB: 'GBP', US: 'USD' };
 
   const sectionCustom = (key: string) => (data?.customFields ?? []).filter((c) => c.tabKey === key);
   const isDirty = (key: string) => {
@@ -358,14 +370,57 @@ export default function EmployeeProfilePage() {
       setSavedCustom((prev) => ({ ...prev, ...cloneJson(customForSection) }));
       setSavedAt((prev) => ({ ...prev, [current.key]: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }));
       setNotice(`${current.title} saved`);
+      toast.success(`${current.title} saved`);
       if (data.employee.country && current.key === 'organization') {
         getEmployeeProfile(data.employee.id).then((r) => setData(r.data));
+      }
+      // Login enabled on System Access: create the login now, with a temporary password.
+      if (current.key === 'access' && res.data.values.loginEnabled === 'Yes') {
+        await createLogin(data.employee.id, true);
       }
     } catch (err: any) {
       setErrors((err.errors as FieldErrorItem[]) ?? []);
       setNotice(err.message || 'Could not save this section');
+      toast.error(err.message || 'Could not save this section');
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Creates the login for an employee (System Access). Shows the temporary password once. */
+  const createLogin = async (employeeId: number, automatic = false) => {
+    setLoginBusy(true);
+    try {
+      const r = await createEmployeeLogin(employeeId);
+      const d = r.data;
+      if (d.created) toast.success(`Login created for ${d.username}. Copy the temporary password now.`);
+      else toast.info(`This employee already has a login (${d.username}).`);
+      setLoginNote(
+        d.created
+          ? { tone: 'ok', text: `Login created. Username: ${d.username}. Share the temporary password below, or email it. The employee must choose a new password at first sign-in.`, password: d.temporaryPassword }
+          : { tone: 'info', text: `This employee already has a login (username ${d.username}).` },
+      );
+    } catch (e: any) {
+      // Automatic creation after a save: say why it did not happen; the Create login button is still there.
+      setLoginNote({ tone: 'warn', text: automatic ? `Saved, but the login was not created: ${e.message}` : e.message || 'Could not create the login' });
+      toast.error(automatic ? `Saved, but the login was not created: ${e.message}` : e.message || 'Could not create the login');
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const sendLogin = async () => {
+    if (!data) return;
+    setLoginBusy(true);
+    try {
+      const r = await sendEmployeeLoginDetails(data.employee.id);
+      setLoginNote({ tone: 'ok', text: `Login details emailed to ${r.data.sentTo}. The temporary password was changed, so an earlier one no longer works.` });
+      toast.success(`Login details emailed to ${r.data.sentTo}`);
+    } catch (e: any) {
+      setLoginNote({ tone: 'warn', text: e.message || 'Could not send the login details' });
+      toast.error(e.message || 'Could not send the login details');
+    } finally {
+      setLoginBusy(false);
     }
   };
 
@@ -448,12 +503,10 @@ export default function EmployeeProfilePage() {
     }
   };
 
+  /** Leaves the profile and goes back to the employee list. Unsaved changes in any section are discarded, after a warning. */
   const cancel = () => {
-    if (!current) return;
-    setValues((prev) => ({ ...prev, [current.key]: cloneJson(saved[current.key]) }));
-    setCustom((prev) => ({ ...prev, ...cloneJson(Object.fromEntries(sectionCustom(current.key).map((f) => [f.code, savedCustom[f.code]]))) }));
-    setErrors([]);
-    setNotice('');
+    if (dirtyCount > 0 && !window.confirm('Discard the unsaved changes and go back to the employee list?')) return;
+    router.push('/employees');
   };
 
   const renderField = (sec: string, f: ProfileFieldDef, value: any, onChange: (v: any) => void, keyName: string, idx?: number) => (
@@ -582,7 +635,11 @@ export default function EmployeeProfilePage() {
 
     return (
       <div key={gi} className={`grid grid-cols-1 gap-4 ${gridCols(g.columns)}`}>
-        {(g.fields ?? []).filter((f) => !f.showWhen || String(v[f.showWhen.key] ?? '') === f.showWhen.equals).map((f) => renderField(sec, f, v[f.key], (val) => setField(sec, f.key, val), f.key))}
+        {(g.fields ?? [])
+          // Country of employment is shown and changed in the header, not on the Organization tab.
+          .filter((f) => !(sec === 'organization' && f.key === 'legalEntityCountry'))
+          .filter((f) => !f.showWhen || String(v[f.showWhen.key] ?? '') === f.showWhen.equals)
+          .map((f) => renderField(sec, f, v[f.key], (val) => setField(sec, f.key, val), f.key))}
       </div>
     );
   };
@@ -657,7 +714,26 @@ export default function EmployeeProfilePage() {
           <div><p className="text-xs text-gray-500">Employment type</p><p className="text-sm font-medium text-gray-900">{values.employment?.employmentType || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Joining date</p><p className="text-sm font-medium text-gray-900">{values.employment?.dateOfJoining || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Reporting manager</p><p className="text-sm font-medium text-gray-900">{managerLabel || '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Country · currency</p><p className="text-sm font-medium text-gray-900">{emp.country} · {emp.currency}</p></div>
+          <div>
+            <p className="text-xs text-gray-500">Country · currency</p>
+            {canEdit ? (
+              <div className="mt-0.5 flex items-center gap-2">
+                <select
+                  aria-label="Country of employment"
+                  className="rounded-md border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  value={chosenCountry || emp.country}
+                  onChange={(e) => setField('organization', 'legalEntityCountry', e.target.value)}
+                >
+                  {headerCountryOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <span className="text-sm font-medium text-gray-900">· {CURRENCY_BY_COUNTRY[chosenCountry || emp.country] ?? emp.currency}</span>
+              </div>
+            ) : (
+              <p className="text-sm font-medium text-gray-900">{emp.country} · {emp.currency}</p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -730,6 +806,34 @@ export default function EmployeeProfilePage() {
               )
             )}
             {current.key === 'dependents' && !isNew && <EmployeeDependants employeeId={empId} canEdit={canEdit} />}
+            {current.key === 'access' && !isNew && (
+              <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900">Login</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Saving with Login enabled creates the login with a temporary password. You can also email the login details to the employee.</p>
+                  </div>
+                  {canEdit && (
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button type="button" onClick={() => createLogin(data.employee.id)} disabled={loginBusy} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Create login</button>
+                      <button type="button" onClick={sendLogin} disabled={loginBusy} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">Send login details by email</button>
+                    </div>
+                  )}
+                </div>
+                {loginNote && (
+                  <div className={`mt-3 rounded-lg border px-3.5 py-2.5 text-sm ${loginNote.tone === 'ok' ? 'border-green-200 bg-green-50 text-green-800' : loginNote.tone === 'warn' ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>
+                    <p>{loginNote.text}</p>
+                    {loginNote.password && (
+                      <p className="mt-2 flex flex-wrap items-center gap-3">
+                        <span>Temporary password:</span>
+                        <code className="rounded bg-white px-2 py-1 font-mono text-[13px] text-gray-900">{loginNote.password}</code>
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(loginNote.password!).catch(() => undefined)} className="text-xs font-medium text-blue-700 hover:text-blue-900">Copy</button>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {current.key !== 'documents' && current.key !== 'dependents' && current.groups.map((g, gi) => {
               // Hide conditional groups before rendering their heading.
               if (g.showWhen && (values[current.key] ?? {})[g.showWhen.key] !== g.showWhen.equals) return null;
@@ -803,7 +907,7 @@ export default function EmployeeProfilePage() {
             <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-5">
               <p className="text-sm text-gray-500">{isDirty(current.key) ? 'You have changes in this section. Save to keep them.' : 'No unsaved changes.'}</p>
               <div className="ml-auto flex gap-2">
-                <button type="button" onClick={cancel} disabled={!isDirty(current.key) || saving} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50">
+                <button type="button" onClick={cancel}  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
                   Cancel
                 </button>
                 <button type="button" onClick={save} disabled={!isDirty(current.key) || saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">

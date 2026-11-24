@@ -51,6 +51,12 @@ export class LeaveController {
     return ok(await this.service.apply(u, dto, ip), 'Leave applied');
   }
 
+  /** The employee edits their own leave while it is waiting for a decision. */
+  @Put('applications/:id')
+  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: LeaveRequestDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return ok(await this.service.update(u, id, dto, ip), 'Leave updated');
+  }
+
   @Get('applications/me')
   async mine(
     @CurrentUser() u: CurrentUserPayload,
@@ -78,12 +84,33 @@ export class LeaveController {
     return ok(await this.service.attach(u, id, file, ip), 'Document attached');
   }
 
-  @Get('applications/:id/attachment')
-  async attachment(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Res() res: Response) {
-    const { stream, name, mimeType } = await this.service.attachment(u, id);
+  @Get('applications/:id/attachments')
+  async listAttachments(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload) {
+    return ok(await this.service.listAttachments(u, id), 'Documents retrieved');
+  }
+
+  @Get('applications/:id/attachments/:fileId')
+  async attachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('fileId', ParseIntPipe) fileId: number,
+    @CurrentUser() u: CurrentUserPayload,
+    @Res() res: Response,
+  ) {
+    const { stream, name, mimeType } = await this.service.attachment(u, id, fileId);
     res.setHeader('Content-Type', mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
     stream.pipe(res);
+  }
+
+  @Delete('applications/:id/attachments/:fileId')
+  async removeAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('fileId', ParseIntPipe) fileId: number,
+    @CurrentUser() u: CurrentUserPayload,
+    @Ip() ip: string,
+  ) {
+    await this.service.removeAttachment(u, id, fileId, ip);
+    return ok(null, 'Document removed');
   }
 
   @Put('applications/:id/decision')

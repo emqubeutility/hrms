@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { getDocuments, createDocument, attachDocumentFile, getDocumentTypes, getEmployee, getEmployees, Document, DocumentTypeItem, Employee } from '../lib/api';
 import Select from '../components/Select';
+import Pagination from '../components/Pagination';
 import Modal from '../components/Modal';
 
 export default function DocumentsPage() {
@@ -9,6 +10,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -32,7 +34,7 @@ export default function DocumentsPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     loadDocuments();
-  }, [isAuthenticated, page]);
+  }, [isAuthenticated, page, pageSize]);
 
   // Document type choices: all of them until an employee is chosen, then just that employee's country (plus "ALL").
   useEffect(() => {
@@ -71,7 +73,7 @@ export default function DocumentsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await getDocuments({ page });
+      const res = await getDocuments({ page, pageSize });
       setDocuments(res.data);
       setPagination(res.pagination);
     } catch (err: any) {
@@ -179,13 +181,9 @@ export default function DocumentsPage() {
         </table>
       </div>
 
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <div>Page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} total)</div>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">Previous</button>
-            <button disabled={page >= pagination.totalPages} onClick={() => setPage(page + 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">Next</button>
-          </div>
+      {pagination && (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Pagination page={page} pageSize={pageSize} total={pagination.totalItems} pageSizes={[25, 50, 100]} onPageChange={setPage} onPageSizeChange={(n) => { setPageSize(n); setPage(1); }} />
         </div>
       )}
 

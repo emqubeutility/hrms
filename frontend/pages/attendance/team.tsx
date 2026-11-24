@@ -10,6 +10,9 @@ import Select from '../../components/Select';
 const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
 const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
 const MANAGER_STATUSES = ['PRESENT', 'ABSENT', 'NOT_FOUND_PRESENT'];
+// Filter bar: one shared look for every control (labels above, same height).
+const filterLabelClass = 'mb-1.5 block text-xs font-medium text-gray-600';
+const filterFieldClass = 'block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
 
 interface Target {
   employeeId: number;
@@ -155,45 +158,63 @@ export default function TeamAttendancePage() {
         {isHr && <button type="button" onClick={openNew} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">+ Add or correct a day</button>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50" aria-label="Previous month">←</button>
-          <span className="w-36 text-center text-sm font-medium text-gray-800">{label}</span>
-          <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50" aria-label="Next month">→</button>
+      <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50" aria-label="Previous month">←</button>
+            <span className="min-w-[9rem] text-center text-sm font-semibold text-gray-900">{label}</span>
+            <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50" aria-label="Next month">→</button>
+          </div>
+          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 text-sm">
+            <button type="button" onClick={() => setFilter('all')} className={`px-3.5 py-1.5 ${filter === 'all' ? 'bg-blue-600 font-medium text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>All days</button>
+            <button type="button" onClick={() => setFilter('pending')} className={`border-l border-gray-300 px-3.5 py-1.5 ${filter === 'pending' ? 'bg-blue-600 font-medium text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+              Pending approval <span className={`ml-1 rounded-full px-1.5 text-xs ${filter === 'pending' ? 'bg-white/20' : 'bg-amber-100 text-amber-800'}`}>{pending}</span>
+            </button>
+          </div>
         </div>
-        <div className="w-60">
-          <Select multiple aria-label="Employees" options={empOptions} values={empFilter} onValuesChange={setEmpFilter} placeholder="All employees" allText="All employees" noun="employees" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" />
-        </div>
-        <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 text-sm">
-          <button type="button" onClick={() => setFilter('all')} className={`px-3 py-1.5 ${filter === 'all' ? 'bg-blue-50 font-medium text-blue-700' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>All</button>
-          <button type="button" onClick={() => setFilter('pending')} className={`border-l border-gray-300 px-3 py-1.5 ${filter === 'pending' ? 'bg-blue-50 font-medium text-blue-700' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Pending approval ({pending})</button>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-56">
-          <Select
-            multiple
-            aria-label="Status"
-            options={statuses.filter((x) => x.isActive).map((x) => ({ value: x.code, label: x.name }))}
-            values={statusFilter}
-            onValuesChange={setStatusFilter}
-            placeholder="Any status"
-            allText="Any status"
-            noun="statuses"
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
-          />
-        </div>
-        <label className="text-xs font-medium text-gray-600">From day<input type="date" min={monthStart(month.y, month.m)} max={monthEnd(month.y, month.m)} value={dayFrom} onChange={(e) => setDayFrom(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
-        <label className="text-xs font-medium text-gray-600">To day<input type="date" min={dayFrom || monthStart(month.y, month.m)} max={monthEnd(month.y, month.m)} value={dayTo} onChange={(e) => setDayTo(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
-        {([['Late', onlyLate, setOnlyLate], ['Missing OUT', onlyMissingOut, setOnlyMissingOut], ['Comp off given', onlyCompOff, setOnlyCompOff]] as const).map(([text, on, set]) => (
-          <label key={text} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${on ? 'border-blue-300 bg-blue-50 font-medium text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}>
-            <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-            {text}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <p className={filterLabelClass}>Employees</p>
+            <Select multiple aria-label="Employees" options={empOptions} values={empFilter} onValuesChange={setEmpFilter} placeholder="All employees" allText="All employees" noun="employees" className={filterFieldClass} />
+          </div>
+          <div>
+            <p className={filterLabelClass}>Status</p>
+            <Select
+              multiple
+              aria-label="Status"
+              options={statuses.filter((x) => x.isActive).map((x) => ({ value: x.code, label: x.name }))}
+              values={statusFilter}
+              onValuesChange={setStatusFilter}
+              placeholder="Any status"
+              allText="Any status"
+              noun="statuses"
+              className={filterFieldClass}
+            />
+          </div>
+          <label className="block">
+            <span className={filterLabelClass}>From day</span>
+            <input type="date" min={monthStart(month.y, month.m)} max={monthEnd(month.y, month.m)} value={dayFrom} onChange={(e) => setDayFrom(e.target.value)} className={filterFieldClass} />
           </label>
-        ))}
-        {filtersOn && <button type="button" onClick={clearFilters} className="pb-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">Clear filters</button>}
-        <p className="ml-auto pb-1.5 text-xs text-gray-500">{loading ? '' : `Showing ${shown.length} of ${rows.length} days`}</p>
+          <label className="block">
+            <span className={filterLabelClass}>To day</span>
+            <input type="date" min={dayFrom || monthStart(month.y, month.m)} max={monthEnd(month.y, month.m)} value={dayTo} onChange={(e) => setDayTo(e.target.value)} className={filterFieldClass} />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+          <span className="mr-1 text-xs font-medium uppercase tracking-wider text-gray-500">Only</span>
+          {([['Late', onlyLate, setOnlyLate], ['Missing OUT', onlyMissingOut, setOnlyMissingOut], ['Comp off given', onlyCompOff, setOnlyCompOff]] as const).map(([text, on, set]) => (
+            <label key={text} className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}>
+              <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} className="sr-only" />
+              {text}
+            </label>
+          ))}
+          {filtersOn && (
+            <button type="button" onClick={clearFilters} className="ml-1 text-sm font-medium text-blue-600 hover:text-blue-800">Clear all</button>
+          )}
+          <p className="ml-auto text-xs text-gray-500">{loading ? '' : `Showing ${shown.length} of ${rows.length} days`}</p>
+        </div>
       </div>
 
       {error && !edit && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}

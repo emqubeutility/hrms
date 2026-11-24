@@ -12,6 +12,8 @@ import { getMe } from './admin-api';
 export interface AuthUser {
   id: number;
   username: string;
+  /** The person's name from their profile (first and last), for display. Falls back to the username. */
+  fullName: string;
   userTypeId: number;
   profileId: number;
   mustChangePassword: boolean;
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser({
       id: me.data.id,
       username: me.data.username,
+      fullName: [me.data.profile?.name, me.data.profile?.lastName].filter(Boolean).join(' ') || me.data.username,
       userTypeId: me.data.userTypeId,
       profileId: me.data.profileId,
       mustChangePassword: me.data.mustChangePassword,

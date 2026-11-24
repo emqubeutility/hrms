@@ -25,7 +25,15 @@ export class BulkUpdateService {
       this.prisma.branch.findMany({ where: { isActive: true, ...(user.branchAccess ? { id: { in: user.branchAccess } } : {}) }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true } }),
       this.prisma.shift.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       this.prisma.employee.findMany({
-        where: { isActive: true, ...(user.branchAccess ? { branchId: { in: user.branchAccess } } : {}) },
+        where: {
+          isActive: true,
+          ...(user.branchAccess ? { branchId: { in: user.branchAccess } } : {}),
+          // Executives cannot be a reporting manager (same rule as the profile).
+          NOT: [
+            { profile: { user: { userTypeId: 1 } } },
+            { profileSections: { some: { sectionKey: 'access', data: { path: ['accessRole'], equals: 'Executive' } } } },
+          ],
+        },
         orderBy: { employeeCode: 'asc' },
         select: { id: true, employeeCode: true, profile: { select: { name: true, lastName: true } } },
       }),

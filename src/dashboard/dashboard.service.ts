@@ -91,7 +91,7 @@ export class DashboardService {
       this.prisma.attendance.findUnique({ where: { employeeId_date: { employeeId, date: today } }, include: { status: { select: { name: true } } } }),
       this.prisma.leaveCredit.findMany({ where: { employeeId, remaining: { gt: 0 }, OR: [{ expiresOn: null }, { expiresOn: { gte: today } }] }, select: { leaveTypeId: true, remaining: true } }),
       this.prisma.leaveType.findMany({ where: { isActive: true, balanceTracking: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-      this.prisma.leaveApplication.count({ where: { employeeId, status: 'PENDING' } }),
+      this.prisma.leaveApplication.count({ where: { employeeId, status: { in: ['PENDING', 'MANAGER_APPROVED'] } } }),
       this.prisma.leaveApplication.findFirst({ where: { employeeId, status: 'APPROVED', toDate: { gte: today } }, orderBy: { fromDate: 'asc' }, include: { leaveType: { select: { name: true } } } }),
     ]);
     const balances = types
@@ -111,7 +111,7 @@ export class DashboardService {
     const [att, leave, leavePending, correctionsPending, toApprove] = await Promise.all([
       this.prisma.attendance.findMany({ where: { employeeId: { in: ids }, date: today }, select: { employeeId: true, isPresent: true, statusCode: true, lateMinutes: true } }),
       this.prisma.leaveApplication.findMany({ where: { employeeId: { in: ids }, status: 'APPROVED', fromDate: { lte: today }, toDate: { gte: today } }, select: { employeeId: true } }),
-      this.prisma.leaveApplication.count({ where: { employeeId: { in: ids }, status: 'PENDING' } }),
+      this.prisma.leaveApplication.count({ where: { employeeId: { in: ids }, status: { in: ['PENDING', 'MANAGER_APPROVED'] } } }),
       this.prisma.attendanceRegularization.count({ where: { employeeId: { in: ids }, status: 'PENDING' } }),
       this.prisma.attendance.count({ where: { employeeId: { in: ids }, approvedAt: null, isPresent: true, date: { lt: today } } }),
     ]);
@@ -187,7 +187,7 @@ export class DashboardService {
     if (scope) {
       const ids = (await this.prisma.employee.findMany({ where: scope, select: { id: true } })).map((e) => e.id);
       const [leaveWaiting, corrWaiting] = await Promise.all([
-        this.prisma.leaveApplication.count({ where: { employeeId: { in: ids }, status: 'PENDING' } }),
+        this.prisma.leaveApplication.count({ where: { employeeId: { in: ids }, status: { in: ['PENDING', 'MANAGER_APPROVED'] } } }),
         this.prisma.attendanceRegularization.count({ where: { employeeId: { in: ids }, status: 'PENDING' } }),
       ]);
       if (leaveWaiting) out.push({ id: 'wait-leave', kind: 'APPROVAL_WAITING', title: `${leaveWaiting} leave request${leaveWaiting === 1 ? '' : 's'} waiting`, detail: 'Waiting for your decision', href: '/leave/team', at: nowIso });

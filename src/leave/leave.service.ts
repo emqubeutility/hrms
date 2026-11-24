@@ -16,6 +16,9 @@ import { CarryRule, pickCarryRule } from './leave-formula';
 import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, isoAdd, leaveYear, monthlyCredit } from './leave-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
+
+/** Applications still waiting for a decision: with the manager, or with HR after the manager's approval. */
+const OPEN_STATUSES = ['PENDING', 'MANAGER_APPROVED'];
 const MARGIN = 7;
 const num = (d: Prisma.Decimal | number) => Number(d);
 /** Days are shown to 2 decimals: adding decimals as JS numbers leaves tails like 27.450000000000003. */
@@ -93,7 +96,7 @@ export class LeaveService {
     const { days, noRoster } = await this.timeline(employeeId, from, to);
     // Other leave of types that take part in sandwich leave, so leave on the far side of a weekend is seen.
     const others = await this.prisma.leaveApplication.findMany({
-      where: { employeeId, status: { in: ['PENDING', 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, leaveType: { isSandwichEligible: true }, fromDate: { lte: parseIsoDate(isoAdd(to, MARGIN))! }, toDate: { gte: parseIsoDate(isoAdd(from, -MARGIN))! } },
+      where: { employeeId, status: { in: [...OPEN_STATUSES, 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, leaveType: { isSandwichEligible: true }, fromDate: { lte: parseIsoDate(isoAdd(to, MARGIN))! }, toDate: { gte: parseIsoDate(isoAdd(from, -MARGIN))! } },
       select: { calculation: true },
     });
     const existing = new Set<string>();
@@ -112,7 +115,7 @@ export class LeaveService {
   async balances(employeeId: number) {
     const [types, pending] = await Promise.all([
       this.prisma.leaveType.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }] }),
-      this.prisma.leaveApplication.groupBy({ by: ['leaveTypeId'], where: { employeeId, status: 'PENDING' }, _sum: { totalDays: true } }),
+      this.prisma.leaveApplication.groupBy({ by: ['leaveTypeId'], where: { employeeId, status: { in: OPEN_STATUSES } }, _sum: { totalDays: true } }),
     ]);
     const out = [];
     for (const t of types) {
@@ -166,7 +169,7 @@ export class LeaveService {
     const chosen = ((type.variants as { label: string; maxDays: number }[]) ?? []).find((v) => v.label === dto.variant);
     if (chosen && result.totalDays > chosen.maxDays) throw new BadRequestException(`${type.name} (${chosen.label}) can be at most ${chosen.maxDays} days`);
     if (type.maxDaysPerRequest && result.totalDays > type.maxDaysPerRequest) throw new BadRequestException(`${type.name} can be at most ${type.maxDaysPerRequest} days at a time`);
-    const overlap = await this.prisma.leaveApplication.findFirst({ where: { employeeId, status: { in: ['PENDING', 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, fromDate: { lte: to }, toDate: { gte: from } } });
+    const overlap = await this.prisma.leaveApplication.findFirst({ where: { employeeId, status: { in: [...OPEN_STATUSES, 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, fromDate: { lte: to }, toDate: { gte: from } } });
     if (overlap) throw new ConflictException(`You already have leave from ${toIsoDate(overlap.fromDate)} to ${toIsoDate(overlap.toDate)} that overlaps these dates`);
     return { type, result, noRoster, from, to, halfDay };
   }
@@ -217,7 +220,7 @@ export class LeaveService {
       if (typeof gender !== 'string' || gender.trim().toLowerCase() !== type.genderRestriction.trim().toLowerCase()) throw new BadRequestException(`${type.name} is only for ${type.genderRestriction.toLowerCase()} employees`);
     }
     if (type.maxTimesInService) {
-      const used = await this.prisma.leaveApplication.count({ where: { employeeId, leaveTypeId: type.id, status: { in: ['PENDING', 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined } });
+      const used = await this.prisma.leaveApplication.count({ where: { employeeId, leaveTypeId: type.id, status: { in: [...OPEN_STATUSES, 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined } });
       if (used >= type.maxTimesInService) throw new BadRequestException(`${type.name} can be taken only ${type.maxTimesInService === 1 ? 'once' : type.maxTimesInService + ' times'} during employment, and you have already used it`);
     }
     if (type.eventWindowMonths) {
@@ -229,9 +232,10 @@ export class LeaveService {
     }
   }
 
-  private async available(employeeId: number, typeId: number): Promise<number> {
+  /** Balance less what is waiting for a decision. `excludeApplicationId` leaves out the leave being edited, so its own days are not counted twice. */
+  private async available(employeeId: number, typeId: number, excludeApplicationId?: number): Promise<number> {
     const credits = await this.creditsOf(employeeId, typeId);
-    const pending = await this.prisma.leaveApplication.aggregate({ where: { employeeId, leaveTypeId: typeId, status: 'PENDING' }, _sum: { totalDays: true } });
+    const pending = await this.prisma.leaveApplication.aggregate({ where: { employeeId, leaveTypeId: typeId, status: { in: OPEN_STATUSES }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined }, _sum: { totalDays: true } });
     return round2(credits.reduce((s, c) => s + c.remaining, 0) - num(pending._sum.totalDays ?? 0));
   }
 
@@ -266,13 +270,57 @@ export class LeaveService {
     return this.present(await this.prisma.leaveApplication.findUniqueOrThrow({ where: { id: created.id }, include: this.include }));
   }
 
+  /**
+   * The employee edits their own leave while it is waiting for a decision. The new dates and type are checked
+   * the same way as a new request (the leave itself is not counted against its own dates). Attachment and
+   * status are kept; the approver sees the changed request.
+   */
+  async update(user: CurrentUserPayload, id: number, dto: LeaveRequestDto, ip?: string) {
+    const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { employee: { select: { profileId: true } } } });
+    if (!app) throw new NotFoundException('Application not found');
+    if (app.employee.profileId !== user.profileId) throw new ForbiddenException('You can only edit your own leave');
+    if (app.status !== 'PENDING') throw new ConflictException('Only leave that is waiting for a decision can be edited');
+
+    const { type, result, from, to } = await this.checked(app.employeeId, dto, id);
+    if (!type.requiresApproval) throw new BadRequestException(`${type.name} is approved as soon as it is sent, so it cannot be edited. Cancel it and apply again.`);
+    if (type.balanceTracking && !type.allowNegative) {
+      const available = await this.available(app.employeeId, type.id, id);
+      if (available < result.totalDays) throw new BadRequestException(`Not enough ${type.name}: ${available} available, ${result.totalDays} needed`);
+    }
+
+    await this.prisma.leaveApplication.update({
+      where: { id },
+      data: {
+        leaveTypeId: type.id,
+        fromDate: from,
+        toDate: to,
+        halfDayPart: dto.halfDayPart ?? null,
+        eventDate: dto.eventDate ? parseIsoDate(dto.eventDate)! : null,
+        variant: dto.variant ?? null,
+        requestedDays: result.requestedDays,
+        sandwichDays: result.sandwichDays,
+        totalDays: result.totalDays,
+        reason: dto.reason?.trim() || null,
+        calculation: result.days as unknown as Prisma.InputJsonValue,
+      },
+    });
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_EDITED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip, metadata: { type: type.code, days: result.totalDays } });
+    return this.present(await this.prisma.leaveApplication.findUniqueOrThrow({ where: { id }, include: this.include }));
+  }
+
   /* ------------------------------------------------------------------ deciding and cancelling */
 
+  /**
+   * Two steps. The manager approves first (status MANAGER_APPROVED, waiting for HR). HR confirms, and only then
+   * the days are taken from the balance and marked on attendance. HR may also approve a leave that is still
+   * waiting for the manager. Either of them may reject.
+   */
   async decide(user: CurrentUserPayload, id: number, approve: boolean, note: string | undefined, ip?: string) {
     const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { leaveType: true } });
     if (!app) throw new NotFoundException('Application not found');
-    if (app.status !== 'PENDING') throw new ConflictException('This application has already been decided');
+    if (!OPEN_STATUSES.includes(app.status)) throw new ConflictException('This application has already been decided');
     await this.assertMayDecide(user, app.employeeId);
+    const isHr = HR_TYPES.includes(user.userTypeId);
 
     if (!approve) {
       await this.prisma.leaveApplication.update({ where: { id }, data: { status: 'REJECTED', decidedById: user.profileId, decidedAt: new Date(), decisionNote: note?.trim() || null } });
@@ -280,7 +328,17 @@ export class LeaveService {
       return;
     }
 
-    if (app.leaveType.requiresDocument && num(app.totalDays) > app.leaveType.documentAfterDays && !app.attachmentFileId) {
+    // The manager's step: HR confirms next.
+    if (app.status === 'PENDING' && !isHr) {
+      await this.prisma.leaveApplication.update({ where: { id }, data: { status: 'MANAGER_APPROVED', managerDecidedById: user.profileId, managerDecidedAt: new Date(), managerNote: note?.trim() || null } });
+      await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_MANAGER_APPROVED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip });
+      return;
+    }
+    if (!isHr) throw new ForbiddenException('Only HR can confirm a leave that the manager has approved');
+
+    // HR's step: final approval.
+    const documents = await this.prisma.leaveAttachment.count({ where: { applicationId: id } });
+    if (app.leaveType.requiresDocument && num(app.totalDays) > app.leaveType.documentAfterDays && documents === 0) {
       throw new ConflictException(`${app.leaveType.name} needs a supporting document. Ask the employee to attach it first.`);
     }
     await this.approveApplication(user, app, ip, note);
@@ -288,7 +346,7 @@ export class LeaveService {
 
   /* ------------------------------------------------------------------ supporting document */
 
-  /** Attach (or replace) the supporting document of an application that has not been decided. The employee or HR may do it. */
+  /** Add a supporting document to an application that has not been decided. The employee or HR may do it. Several may be added. */
   async attach(user: CurrentUserPayload, id: number, file: UploadedFileLike | undefined, ip?: string) {
     if (!file) throw new BadRequestException('Choose a file to attach');
     if (file.size > 10 * 1024 * 1024) throw new BadRequestException('The file can be at most 10 MB');
@@ -297,21 +355,53 @@ export class LeaveService {
     if (!app) throw new NotFoundException('Application not found');
     const own = app.employee.profileId === user.profileId;
     if (!own && !HR_TYPES.includes(user.userTypeId)) throw new ForbiddenException('You can attach a document only to your own leave');
-    if (app.status !== 'PENDING') throw new ConflictException('The document can be attached only while the leave is waiting for a decision');
+    if (!OPEN_STATUSES.includes(app.status)) throw new ConflictException('Documents can be changed only while the leave is waiting for a decision');
     const saved = await this.files.saveFile(file);
     const row = await this.prisma.storedFile.create({ data: { originalName: saved.originalName, storageKey: saved.storageKey, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes, sha256: saved.sha256, createdById: user.profileId } });
-    await this.prisma.leaveApplication.update({ where: { id }, data: { attachmentFileId: row.id } });
-    if (app.attachmentFileId) await this.prisma.storedFile.update({ where: { id: app.attachmentFileId }, data: { isActive: false } });
-    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_DOCUMENT_ATTACHED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip });
-    return { name: saved.originalName };
+    await this.prisma.leaveAttachment.create({ data: { applicationId: id, fileId: row.id } });
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_DOCUMENT_ATTACHED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip, metadata: { file: saved.originalName } });
+    return { id: Number(row.id), name: saved.originalName };
   }
 
-  /** The supporting document, for the employee, HR, or the manager who decides. */
-  async attachment(user: CurrentUserPayload, id: number) {
-    const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { employee: { select: { profileId: true } }, attachmentFile: true } });
-    if (!app || !app.attachmentFile) throw new NotFoundException('There is no document on this application');
+  /** Who may see the documents of a leave: its employee, HR, and the manager who decides. */
+  private async assertCanSeeLeave(user: CurrentUserPayload, app: { employeeId: number; employee: { profileId: number } }) {
     if (app.employee.profileId !== user.profileId) await this.assertMayDecide(user, app.employeeId);
-    return { stream: this.files.readFile(app.attachmentFile.storageKey), name: app.attachmentFile.originalName, mimeType: app.attachmentFile.mimeType };
+  }
+
+  /** The documents of one leave: id and name, newest last. */
+  async listAttachments(user: CurrentUserPayload, id: number) {
+    const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { employee: { select: { profileId: true } } } });
+    if (!app) throw new NotFoundException('Application not found');
+    await this.assertCanSeeLeave(user, app);
+    const links = await this.prisma.leaveAttachment.findMany({ where: { applicationId: id }, orderBy: { id: 'asc' }, include: { file: { select: { id: true, originalName: true, isActive: true } } } });
+    return links.filter((l) => l.file.isActive).map((l) => ({ id: Number(l.file.id), name: l.file.originalName }));
+  }
+
+  /** One document of a leave, for viewing or downloading. */
+  async attachment(user: CurrentUserPayload, id: number, fileId: number) {
+    const link = await this.prisma.leaveAttachment.findUnique({
+      where: { applicationId_fileId: { applicationId: id, fileId: BigInt(fileId) } },
+      include: { file: true, application: { select: { employeeId: true, employee: { select: { profileId: true } } } } },
+    });
+    if (!link || !link.file.isActive) throw new NotFoundException('There is no such document on this leave');
+    await this.assertCanSeeLeave(user, link.application);
+    return { stream: this.files.readFile(link.file.storageKey), name: link.file.originalName, mimeType: link.file.mimeType };
+  }
+
+  /** Removes one document from a leave that is still waiting for a decision (the employee or HR). */
+  async removeAttachment(user: CurrentUserPayload, id: number, fileId: number, ip?: string) {
+    const app = await this.prisma.leaveApplication.findUnique({ where: { id }, include: { employee: { select: { profileId: true } } } });
+    if (!app) throw new NotFoundException('Application not found');
+    const own = app.employee.profileId === user.profileId;
+    if (!own && !HR_TYPES.includes(user.userTypeId)) throw new ForbiddenException('You can remove a document only from your own leave');
+    if (!OPEN_STATUSES.includes(app.status)) throw new ConflictException('Documents can be changed only while the leave is waiting for a decision');
+    const link = await this.prisma.leaveAttachment.findUnique({ where: { applicationId_fileId: { applicationId: id, fileId: BigInt(fileId) } } });
+    if (!link) throw new NotFoundException('There is no such document on this leave');
+    await this.prisma.$transaction([
+      this.prisma.leaveAttachment.delete({ where: { applicationId_fileId: { applicationId: id, fileId: BigInt(fileId) } } }),
+      this.prisma.storedFile.update({ where: { id: BigInt(fileId) }, data: { isActive: false } }),
+    ]);
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_DOCUMENT_REMOVED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip, metadata: { fileId } });
   }
 
   /** Approves one pending application: counts the days again, takes them from the balance and marks the attendance. */
@@ -382,7 +472,7 @@ export class LeaveService {
 
   /* ------------------------------------------------------------------ reading */
 
-  private include = { leaveType: { select: { id: true, code: true, name: true, isPaid: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } }, attachmentFile: { select: { originalName: true } } } as const;
+  private include = { leaveType: { select: { id: true, code: true, name: true, isPaid: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } }, attachments: { orderBy: { id: 'asc' as const }, include: { file: { select: { id: true, originalName: true, isActive: true } } } } } as const;
 
   private present(a: Prisma.LeaveApplicationGetPayload<{ include: LeaveService['include'] }>) {
     return {
@@ -400,12 +490,15 @@ export class LeaveService {
       status: a.status,
       reason: a.reason,
       decisionNote: a.decisionNote,
+      managerNote: a.managerNote,
+      managerDecidedAt: a.managerDecidedAt,
       decidedAt: a.decidedAt,
       createdAt: a.createdAt,
       calculation: a.calculation,
       variant: a.variant,
-      hasAttachment: a.attachmentFileId !== null,
-      attachmentName: a.attachmentFile?.originalName ?? null,
+      hasAttachment: a.attachments.some((l) => l.file.isActive),
+      attachmentName: a.attachments.find((l) => l.file.isActive)?.file.originalName ?? null,
+      attachments: a.attachments.filter((l) => l.file.isActive).map((l) => ({ id: Number(l.file.id), name: l.file.originalName })),
     };
   }
 
@@ -414,7 +507,7 @@ export class LeaveService {
     const employeeId = await this.myEmployeeId(user);
     const where: Prisma.LeaveApplicationWhereInput = { employeeId };
     if (filters.status) {
-      if (!['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(filters.status)) throw new BadRequestException('Unknown status');
+      if (!['PENDING', 'MANAGER_APPROVED', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(filters.status)) throw new BadRequestException('Unknown status');
       where.status = filters.status;
     }
     if (filters.leaveTypeId) where.leaveTypeId = filters.leaveTypeId;
@@ -435,7 +528,9 @@ export class LeaveService {
 
   /** Applications waiting for the caller (status PENDING), or any status. */
   async team(user: CurrentUserPayload, status?: string) {
-    const rows = await this.prisma.leaveApplication.findMany({ where: { ...(await this.scopeWhere(user)), ...(status ? { status } : {}) }, orderBy: [{ status: 'asc' }, { fromDate: 'desc' }], take: 200, include: this.include });
+    // "PENDING" from the team screen means everything still waiting, with the manager or with HR.
+    const statusWhere = status === 'PENDING' ? { status: { in: OPEN_STATUSES } } : status ? { status } : {};
+    const rows = await this.prisma.leaveApplication.findMany({ where: { ...(await this.scopeWhere(user)), ...statusWhere }, orderBy: [{ status: 'asc' }, { fromDate: 'desc' }], take: 200, include: this.include });
     return rows.map((r) => this.present(r));
   }
 
@@ -445,7 +540,7 @@ export class LeaveService {
     const to = parseIsoDate(toStr);
     if (!from || !to || to < from) throw new BadRequestException('Give a valid from and to date');
     if ((to.getTime() - from.getTime()) / 86_400_000 > 93) throw new BadRequestException('Ask for at most three months at a time');
-    const where: Prisma.LeaveApplicationWhereInput = { status: { in: ['PENDING', 'APPROVED'] }, fromDate: { lte: to }, toDate: { gte: from }, ...(scope === 'me' ? { employeeId: await this.myEmployeeId(user) } : await this.scopeWhere(user)) };
+    const where: Prisma.LeaveApplicationWhereInput = { status: { in: [...OPEN_STATUSES, 'APPROVED'] }, fromDate: { lte: to }, toDate: { gte: from }, ...(scope === 'me' ? { employeeId: await this.myEmployeeId(user) } : await this.scopeWhere(user)) };
     const rows = await this.prisma.leaveApplication.findMany({ where, orderBy: { fromDate: 'asc' }, take: 500, include: this.include });
     return rows.map((r) => this.present(r));
   }

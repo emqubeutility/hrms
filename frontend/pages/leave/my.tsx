@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, fmtDays, openLeaveDocument, uploadLeaveDocument, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
+import { LEAVE_STATUS_LABEL, LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, fmtDays, uploadLeaveDocument, updateLeave, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
 import Select from '../../components/Select';
 import Modal from '../../components/Modal';
+import LeaveDocumentsModal from '../../components/leave/LeaveDocumentsModal';
+import Pagination from '../../components/Pagination';
+import { usePagedRows } from '../../lib/usePagedRows';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const STATUS_TONE: Record<string, string> = {
   PENDING: 'border-amber-200 bg-amber-50 text-amber-700',
+  MANAGER_APPROVED: 'border-blue-200 bg-blue-50 text-blue-700',
   APPROVED: 'border-green-200 bg-green-50 text-green-700',
   REJECTED: 'border-red-200 bg-red-50 text-red-700',
   CANCELLED: 'border-gray-200 bg-gray-100 text-gray-600',
@@ -20,14 +24,19 @@ export default function MyLeavePage() {
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [apps, setApps] = useState<LeaveApplication[]>([]);
+  const paged = usePagedRows(apps);
   const [form, setForm] = useState({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '' as '' | 'FIRST' | 'SECOND', reason: '', eventDate: '', variant: '' });
   const [preview, setPreview] = useState<LeavePreview | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [error, setError] = useState('');
+  // Leave whose documents are open in the popup (id of the leave application, and a label for the title).
+  const [docsFor, setDocsFor] = useState<{ id: number; label: string } | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [applying, setApplying] = useState(false);
+  // Set while a pending leave is being edited (the same form, saved as an update).
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [filters, setFilters] = useState({ status: '', leaveTypeId: '', from: '', to: '' });
   const filtered = Object.values(filters).some(Boolean);
 
@@ -74,6 +83,27 @@ export default function MyLeavePage() {
     setPreviewError('');
     setForm({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '', reason: '', eventDate: '', variant: '' });
     setDocFile(null);
+    setEditingId(null);
+    setApplying(true);
+  };
+
+  /** Opens the form filled with a leave that is still waiting for a decision. */
+  const openEdit = (a: LeaveApplication) => {
+    setError('');
+    setNotice('');
+    setPreview(null);
+    setPreviewError('');
+    setForm({
+      leaveTypeId: String(a.leaveType.id),
+      fromDate: a.fromDate,
+      toDate: a.toDate,
+      half: (a.halfDayPart ?? '') as '' | 'FIRST' | 'SECOND',
+      reason: a.reason ?? '',
+      eventDate: '',
+      variant: a.variant ?? '',
+    });
+    setDocFile(null);
+    setEditingId(a.id);
     setApplying(true);
   };
 
@@ -84,15 +114,16 @@ export default function MyLeavePage() {
     setError('');
     setNotice('');
     try {
-      const made = await applyLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined, variant: form.variant || undefined, reason: form.reason.trim() || undefined });
+      const payload = { leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined, variant: form.variant || undefined, reason: form.reason.trim() || undefined };
+      const saved = editingId !== null ? await updateLeave(editingId, payload) : await applyLeave(payload);
       if (docFile) {
         try {
-          await uploadLeaveDocument(made.data.id, docFile);
+          await uploadLeaveDocument(saved.data.id, docFile);
         } catch (e: any) {
-          setError(`The leave was sent but the document was not attached: ${e.message || 'upload failed'}. Attach it from the list below.`);
+          setError(`The leave was saved but the document was not attached: ${e.message || 'upload failed'}. Attach it from the list below.`);
         }
       }
-      setNotice('Leave sent for approval');
+      setNotice(editingId !== null ? 'Leave changed. Waiting for approval.' : 'Leave sent for approval');
       setApplying(false);
       await reload();
     } catch (e: any) {
@@ -139,14 +170,14 @@ export default function MyLeavePage() {
       {applying && (
         <Modal
           size="lg"
-          title="Apply for leave"
-          subtitle="Choose the type and dates. The days are counted for you before you send it."
+          title={editingId !== null ? 'Edit leave request' : 'Apply for leave'}
+          subtitle={editingId !== null ? 'Change the type, dates or reason. It stays waiting for approval.' : 'Choose the type and dates. The days are counted for you before you send it.'}
           busy={busy}
           onClose={() => setApplying(false)}
           footer={
             <>
               <button type="button" onClick={() => setApplying(false)} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
-              <button type="button" onClick={submit} disabled={busy || !preview || !preview.enough} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Sending…' : preview && preview.requiresApproval === false ? 'Apply' : 'Send for approval'}</button>
+              <button type="button" onClick={submit} disabled={busy || !preview || !preview.enough} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving…' : editingId !== null ? 'Save changes' : preview && preview.requiresApproval === false ? 'Apply' : 'Send for approval'}</button>
             </>
           }
         >
@@ -260,19 +291,20 @@ export default function MyLeavePage() {
             {apps.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{filtered ? 'No leave matches these filters.' : 'No leave yet.'}</td></tr>
             ) : (
-              apps.map((a) => (
+              paged.pageRows.map((a) => (
                 <tr key={a.id}>
                   <td className="px-4 py-3 font-medium text-gray-900">{a.leaveType.name}{a.variant && <span className="block text-xs font-normal text-gray-500">{a.variant}</span>}</td>
                   <td className="px-4 py-3 font-mono text-[13px] text-gray-700">{a.fromDate}{a.toDate !== a.fromDate ? ` to ${a.toDate}` : a.halfDayPart ? ` (${a.halfDayPart.toLowerCase()} half)` : ''}</td>
                   <td className="px-4 py-3 text-gray-700">{a.totalDays}{a.sandwichDays > 0 && <span className="ml-1 text-xs text-purple-700">incl. {a.sandwichDays} sandwich</span>}</td>
-                  <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[a.status]}`}>{a.status.charAt(0) + a.status.slice(1).toLowerCase()}</span></td>
+                  <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[a.status]}`}>{LEAVE_STATUS_LABEL[a.status]}</span></td>
                   <td className="max-w-xs truncate px-4 py-3 text-xs text-gray-500" title={`${a.reason ?? ''} ${a.decisionNote ?? ''}`}>{a.decisionNote || a.reason}</td>
-                  <td className="px-4 py-3 text-right">{a.hasAttachment && <button type="button" onClick={() => openLeaveDocument(a.id).catch((e) => setError(e.message))} className="mr-3 text-xs font-medium text-blue-600 hover:text-blue-800">Document</button>}{a.status === 'PENDING' && !a.hasAttachment && a.leaveType && types.find((t) => t.id === a.leaveType.id)?.requiresDocument && <label className="mr-3 cursor-pointer text-xs font-medium text-blue-600 hover:text-blue-800">Attach document<input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLeaveDocument(a.id, f).then(reload).catch((er) => setError(er.message)); }} /></label>}{(a.status === 'PENDING' || (a.status === 'APPROVED' && a.fromDate > today())) && <button type="button" onClick={() => cancel(a)} className="text-xs font-medium text-red-600 hover:text-red-800">Cancel</button>}</td>
+                  <td className="px-4 py-3 text-right">{(a.hasAttachment || a.status === 'PENDING') && <button type="button" onClick={() => setDocsFor({ id: a.id, label: `${a.leaveType.name}, ${a.fromDate}${a.toDate !== a.fromDate ? ` to ${a.toDate}` : ''}` })} className="mr-3 text-xs font-medium text-blue-600 hover:text-blue-800">Documents{a.attachments?.length ? ` (${a.attachments.length})` : ''}</button>}{docsFor?.id === a.id && <LeaveDocumentsModal applicationId={a.id} title={docsFor.label} canManage={a.status === 'PENDING'} onChanged={reload} onClose={() => setDocsFor(null)} />}{a.status === 'PENDING' && <button type="button" onClick={() => openEdit(a)} className="mr-3 text-xs font-medium text-blue-600 hover:text-blue-800">Edit</button>}{(a.status === 'PENDING' || a.status === 'MANAGER_APPROVED' || (a.status === 'APPROVED' && a.fromDate > today())) && <button type="button" onClick={() => cancel(a)} className="text-xs font-medium text-red-600 hover:text-red-800">Cancel</button>}</td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+        {apps.length > 0 && <Pagination page={paged.pagination.page} pageSize={paged.pagination.pageSize} total={paged.pagination.total} onPageChange={paged.pagination.onPageChange} onPageSizeChange={paged.pagination.onPageSizeChange} />}
       </section>
     </div>
   );

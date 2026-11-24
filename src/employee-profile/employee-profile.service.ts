@@ -128,7 +128,15 @@ export class EmployeeProfileService {
         select: { id: true, name: true },
       }),
       this.prisma.employee.findMany({
-        where: { isActive: true, ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}) },
+        where: {
+          isActive: true,
+          ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
+          // Executives cannot be a reporting manager: excluded by login role and by System Access role.
+          NOT: [
+            { profile: { user: { userTypeId: UserType.Executive } } },
+            { profileSections: { some: { sectionKey: 'access', data: { path: ['accessRole'], equals: 'Executive' } } } },
+          ],
+        },
         select: { id: true, employeeCode: true, profile: { select: { name: true, lastName: true } } },
         orderBy: { profile: { name: 'asc' } },
         take: 1000,
@@ -187,7 +195,11 @@ export class EmployeeProfileService {
   async getProfile(employeeId: number, user: CurrentUserPayload) {
     const employee = await this.loadEmployee(employeeId);
     const isSelf = employee.profileId === user.profileId;
-    if (!this.isHr(user) && !isSelf) throw new ForbiddenException('You can only view your own profile');
+    // A manager may view the profile of someone who reports to them (read only; editing stays HR).
+    const isManagerOfEmployee = !isSelf && !this.isHr(user) && employee.reportingToId !== null
+      ? (await this.prisma.employee.findUnique({ where: { profileId: user.profileId }, select: { id: true } }))?.id === employee.reportingToId
+      : false;
+    if (!this.isHr(user) && !isSelf && !isManagerOfEmployee) throw new ForbiddenException('You can only view your own profile or your team\'s');
 
     const country = await this.countryOf(employeeId);
     const sections = await this.visibleSections(user, country, await this.lookups(employeeId, user.branchAccess, country));
@@ -256,7 +268,7 @@ export class EmployeeProfileService {
   ) {
     if (!this.isHr(user)) throw new ForbiddenException('Only HR or System Admin can change profile sections');
     if (!(SECTION_KEYS as readonly string[]).includes(sectionKey)) throw new NotFoundException('Unknown profile section');
-    await this.loadEmployee(employeeId);
+    const employee = await this.loadEmployee(employeeId);
 
     const current = await this.countryOf(employeeId);
     const submittedCountry = body.data?.legalEntityCountry;
@@ -334,6 +346,14 @@ export class EmployeeProfileService {
       const template = name ? await this.prisma.weeklyOffTemplate.findUnique({ where: { name: String(name) }, select: { id: true } }) : null;
       const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
       await this.prisma.$transaction((tx) => assignWeeklyOff(tx, employeeId, template?.id ?? null, today));
+    }
+
+    // Keep the login/listing email (Profile.email) in step with Personal details > Contact: personal email first, then official.
+    if (sectionKey === 'personal' && ('personalEmail' in result.values || 'officialEmail' in result.values)) {
+      const email = [result.values.personalEmail, result.values.officialEmail]
+        .map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
+        .find((v) => v !== '') ?? null;
+      await this.prisma.profile.update({ where: { id: employee.profileId }, data: { email } });
     }
 
     // Keep the employee's shift column in step with the Attendance section.

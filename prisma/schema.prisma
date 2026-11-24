@@ -749,6 +749,7 @@ model StoredFile {
   brandingLogo     ApplicationBranding[] @relation("BrandingLogo")
   brandingFavicon  ApplicationBranding[] @relation("BrandingFavicon")
   leaveAttachments LeaveApplication[]    @relation("LeaveAttachment")
+  leaveAttachmentLinks LeaveAttachment[]
 
   @@index([fileTypeId])
   @@map("stored_files")
@@ -1616,7 +1617,7 @@ model LeaveApplication {
   requestedDays    Decimal   @db.Decimal(6, 2)
   sandwichDays     Decimal   @default(0) @db.Decimal(6, 2)
   totalDays        Decimal   @db.Decimal(6, 2)
-  /// PENDING | APPROVED | REJECTED | CANCELLED
+  /// PENDING (waiting for the manager) | MANAGER_APPROVED (waiting for HR to confirm) | APPROVED | REJECTED | CANCELLED
   status           String    @default("PENDING")
   reason           String?
   /// Every day with why it was counted (working, off day, sandwiched), kept as the audit of the calculation.
@@ -1624,6 +1625,10 @@ model LeaveApplication {
   decidedById      Int?
   decidedAt        DateTime? @db.Timestamptz(3)
   decisionNote     String?
+  /// Manager's approval, when HR still has to confirm (status MANAGER_APPROVED).
+  managerDecidedById Int?
+  managerDecidedAt DateTime? @db.Timestamptz(3)
+  managerNote      String?
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
 
   employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -1631,10 +1636,28 @@ model LeaveApplication {
   allocations    LeaveAllocation[]
   attendance     Attendance[]
   attachmentFile StoredFile?       @relation("LeaveAttachment", fields: [attachmentFileId], references: [id])
+  /// Supporting documents (several per leave). attachmentFileId above is the first one, kept for old rows.
+  attachments    LeaveAttachment[]
 
   @@index([employeeId, fromDate])
   @@index([status])
   @@map("leave_applications")
+}
+
+/// NEW — the supporting documents of a leave application (many per leave). Removing one unlinks it and
+/// deactivates the stored file; the file itself stays in private storage for the audit trail.
+model LeaveAttachment {
+  id            BigInt           @id @default(autoincrement())
+  applicationId Int
+  fileId        BigInt
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+
+  application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  file        StoredFile       @relation(fields: [fileId], references: [id])
+
+  @@unique([applicationId, fileId])
+  @@index([applicationId])
+  @@map("leave_attachments")
 }
 
 /// A set of leave rules for a group of employees, valid for a date range. Statutory and company

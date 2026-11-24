@@ -164,6 +164,7 @@ async function seedParameterTypesAndParameters() {
     // Option lists for the profile dropdowns that had none. Lists marked "starter" are minimal and can be extended in System settings.
     33: { name: 'Attendance Processing', parameters: [
       { id: 2001, text: 'Automatic', value: 1, order: 1, visible: true },
+      { id: 2002, text: 'Manual', value: 2, order: 2, visible: true },
     ]},
     35: { name: 'Skill Proficiency', parameters: [ // starter
       { id: 2003, text: 'Beginner', value: 1, order: 1, visible: true },

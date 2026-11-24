@@ -33,9 +33,9 @@ const section = (country: 'IN' | 'AE' | 'GB' | 'US', key: string): SectionDef =>
   buildSections(country, LOOKUPS).find((s) => s.key === key) as SectionDef;
 
 describe('profile schema: sections', () => {
-  it('builds the tabs from the layout workbook, in order, with AirFare last', () => {
+  it('builds the tabs in the current order, with AirFare after Bank', () => {
     const keys = buildSections('IN').map((s) => s.key);
-    expect(keys).toEqual(['personal', 'employment', 'organization', 'attendance', 'bank', 'documents', 'education', 'access', 'airfare']);
+    expect(keys).toEqual(['personal', 'employment', 'organization', 'attendance', 'bank', 'airfare', 'documents', 'education', 'access']);
   });
 
   it('AirFare: ticket details only when eligible, family members only with family airfare', () => {

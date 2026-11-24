@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import Select from '../../components/Select';
 import CompOffList from '../../components/leave/CompOffList';
-import { LeaveApplication, REASON_TEXT, decideLeave, getLeaveCalendar, getTeamLeave, openLeaveDocument } from '../../lib/leave-api';
+import { LEAVE_STATUS_LABEL, LeaveApplication, REASON_TEXT, decideLeave, getLeaveCalendar, getTeamLeave } from '../../lib/leave-api';
+import LeaveDocumentsModal from '../../components/leave/LeaveDocumentsModal';
+import Pagination from '../../components/Pagination';
+import { usePagedRows } from '../../lib/usePagedRows';
 
 type Tab = 'waiting' | 'calendar' | 'compoff';
 
@@ -11,9 +14,14 @@ const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISO
 
 /** Managers and HR: leave waiting for a decision, and who is off this month. */
 export default function TeamLeavePage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  // HR confirms a leave after the manager has approved it; the manager's own approval is the first step.
+  const isHr = !!user && [3, 4].includes(user.userTypeId);
   const [tab, setTab] = useState<Tab>('waiting');
+  // Leave whose documents are open in the popup (id of the leave application, and a label for the title).
+  const [docsFor, setDocsFor] = useState<{ id: number; label: string } | null>(null);
   const [waiting, setWaiting] = useState<LeaveApplication[]>([]);
+  const waitingPaged = usePagedRows(waiting);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [cal, setCal] = useState<LeaveApplication[]>([]);
   // Filters for Who is off.
@@ -104,31 +112,89 @@ export default function TeamLeavePage() {
       {tab === 'waiting' && (
         <div className="space-y-3">
           {waiting.length === 0 && <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Nothing is waiting for you.</p>}
-          {waiting.map((a) => (
-            <section key={a.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{a.employeeName} <span className="text-xs font-normal text-gray-400">{a.employeeCode}</span></p>
-                  <p className="mt-0.5 text-sm text-gray-700">{a.leaveType.name}: <span className="font-mono">{a.fromDate}{a.toDate !== a.fromDate ? ` to ${a.toDate}` : ''}</span>, <b>{a.totalDays}</b> day{a.totalDays === 1 ? '' : 's'}{a.sandwichDays > 0 && <span className="ml-1 text-purple-700">({a.sandwichDays} counted by the sandwich rule)</span>}</p>
-                  {a.reason && <p className="mt-1 text-sm text-gray-600">{a.reason}</p>}
-                  {a.hasAttachment && <button type="button" onClick={() => openLeaveDocument(a.id).catch(() => undefined)} className="mt-1 text-sm font-medium text-blue-600 hover:text-blue-800">View document ({a.attachmentName})</button>}
-                  <button type="button" onClick={() => setOpen(open === a.id ? null : a.id)} className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800">{open === a.id ? 'Hide' : 'Show'} how the days were counted</button>
-                  {open === a.id && (
-                    <table className="mt-2 text-sm">
-                      <tbody>{a.calculation.map((d) => <tr key={d.date}><td className="pr-4 font-mono text-[13px] text-gray-700">{d.date}</td><td className="pr-4 text-gray-600">{REASON_TEXT[d.reason]}</td><td className="text-gray-700">{d.days || ''}</td></tr>)}</tbody>
-                    </table>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <input value={note[a.id] ?? ''} onChange={(e) => setNote({ ...note, [a.id]: e.target.value })} placeholder="Note (optional)" maxLength={300} className="w-56 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => decide(a, false)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Reject</button>
-                    <button type="button" onClick={() => decide(a, true)} className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-green-700">Approve</button>
+          {waitingPaged.pageRows.map((a) => {
+            const initials = a.employeeName.split(' ').filter(Boolean).slice(0, 2).map((n) => n[0]).join('').toUpperCase();
+            const dates = a.toDate !== a.fromDate ? `${a.fromDate} to ${a.toDate}` : a.halfDayPart ? `${a.fromDate}, ${a.halfDayPart === 'FIRST' ? 'first' : 'second'} half` : a.fromDate;
+            return (
+              <section key={a.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4 p-5">
+                  <div className="flex min-w-0 items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">{initials}</div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900">{a.employeeName}</p>
+                      <p className="text-xs text-gray-500">{a.employeeCode}{a.createdAt ? ` · applied ${a.createdAt.slice(0, 10)}` : ''}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{a.leaveType.name}{a.variant ? ` · ${a.variant}` : ''}</span>
+                        <span className="font-mono text-sm text-gray-700">{dates}</span>
+                        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${a.status === 'MANAGER_APPROVED' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{LEAVE_STATUS_LABEL[a.status]}</span>
+                      </div>
+                      {a.reason && <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">{a.reason}</p>}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-3xl font-semibold leading-none text-gray-900">{a.totalDays}</p>
+                    <p className="mt-1 text-xs text-gray-500">day{a.totalDays === 1 ? '' : 's'}{a.sandwichDays > 0 ? ` · ${a.sandwichDays} sandwich` : ''}</p>
                   </div>
                 </div>
-              </div>
-            </section>
-          ))}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3">
+                  <div className="flex flex-wrap items-center gap-4 text-sm">
+                    {a.hasAttachment && (
+                      <button type="button" onClick={() => setDocsFor({ id: a.id, label: `${a.employeeName}, ${a.leaveType.name}` })} className="font-medium text-blue-600 hover:text-blue-800">
+                        Documents ({a.attachments.length})
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setOpen(open === a.id ? null : a.id)} className="text-gray-600 hover:text-gray-900">
+                      {open === a.id ? 'Hide' : 'Show'} day breakdown
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={note[a.id] ?? ''}
+                      onChange={(e) => setNote({ ...note, [a.id]: e.target.value })}
+                      placeholder="Note (optional)"
+                      maxLength={300}
+                      className="w-56 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button type="button" onClick={() => decide(a, false)} className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Reject</button>
+                    {a.status === 'MANAGER_APPROVED' && !isHr ? (
+                      <span className="px-2 text-sm text-blue-700">Approved by you. Waiting for HR.</span>
+                    ) : (
+                      <button type="button" onClick={() => decide(a, true)} className="rounded-lg bg-green-600 px-3.5 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-green-700">
+                        {a.status === 'MANAGER_APPROVED' ? 'Confirm' : 'Approve'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {open === a.id && (
+                  <div className="border-t border-gray-100 px-5 py-4">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        <tr><th className="pb-2">Date</th><th className="pb-2">Counted as</th><th className="pb-2 text-right">Days</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {a.calculation.map((d) => (
+                          <tr key={d.date}>
+                            <td className="py-1.5 font-mono text-[13px] text-gray-800">{d.date}</td>
+                            <td className="py-1.5 text-gray-600">{REASON_TEXT[d.reason]}</td>
+                            <td className="py-1.5 text-right font-medium text-gray-900">{d.days || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {docsFor?.id === a.id && <LeaveDocumentsModal applicationId={a.id} title={docsFor.label} canManage={false} onClose={() => setDocsFor(null)} />}
+              </section>
+            );
+          })}
+          {waiting.length > 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <Pagination {...waitingPaged.pagination} />
+            </div>
+          )}
         </div>
       )}
 

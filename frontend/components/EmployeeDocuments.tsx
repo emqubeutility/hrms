@@ -11,6 +11,7 @@ import {
   getEmployee,
 } from '../lib/api';
 import Select from './Select';
+import DocumentViewer from './DocumentViewer';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED = ['jpg', 'jpeg', 'png', 'pdf'];
@@ -161,16 +162,8 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
     }
   };
 
-  const download = async (doc: Document, fileId: number, name: string) => {
-    try {
-      const url = await downloadDocumentFile(doc.id, fileId);
-      const a = document_createAnchor(url, name);
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch (e: any) {
-      setError(e.message || 'Could not download file');
-    }
-  };
+  // File currently open in the document viewer popup.
+  const [viewing, setViewing] = useState<{ documentId: number; fileId: number; fileName: string } | null>(null);
 
   const remove = async (doc: Document) => {
     if (!window.confirm(`Remove this ${doc.documentType.name} document?`)) return;
@@ -276,7 +269,7 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
                       <span className="text-gray-400">None</span>
                     ) : (
                       (d.files ?? []).map((f) => (
-                        <button key={f.file.id} type="button" onClick={() => download(d, f.file.id, f.file.originalName)} className="block max-w-[220px] truncate text-left text-blue-600 hover:text-blue-800" title={f.file.originalName}>
+                        <button key={f.file.id} type="button" onClick={() => setViewing({ documentId: d.id, fileId: f.file.id, fileName: f.file.originalName })} className="block max-w-[220px] truncate text-left text-blue-600 hover:text-blue-800" title={f.file.originalName}>
                           {f.file.originalName}
                         </button>
                       ))
@@ -299,13 +292,13 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
           </tbody>
         </table>
       </div>
+      {viewing && (
+        <DocumentViewer
+          fileName={viewing.fileName}
+          load={() => downloadDocumentFile(viewing.documentId, viewing.fileId)}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
-}
-
-function document_createAnchor(url: string, name: string) {
-  const a = window.document.createElement('a');
-  a.href = url;
-  a.download = name;
-  return a;
 }

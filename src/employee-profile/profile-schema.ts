@@ -319,7 +319,7 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('legalEntityCountry', 'Country of employment', 'select', { options: ORG_COUNTRY_OPTIONS, required: true, hint: 'Drives address, bank, statutory and document fields' }),
           F('branch', 'Branch', 'select', { optionsSource: 'branches' }),
           F('workLocation', 'Work location'),
-          F('payrollSite', 'Payroll site'),
+          F('payrollSite', 'Payroll site', 'select', { optionsSource: 'branches' }),
           F('department', 'Department', 'select', { optionsSource: 'departments', required: true }),
           F('designation', 'Designation', 'text', { required: true }),
           F('grade', 'Grade', 'select', { optionsParameter: 'Grade' }),
@@ -388,6 +388,20 @@ function rawSections(country: CountryCode): SectionDef[] {
       ],
     },
     {
+      key: 'airfare', title: 'AirFare', group: 'Benefits', hrOnly: false,
+      description: 'Air ticket eligibility, ticket type, eligibility period and rate, and family tickets.',
+      groups: [
+        { title: 'Airfare eligibility', fields: [
+          F('airfareEligible', 'Airfare eligibility', 'yn', { display: 'checkbox' }),
+          F('ticketType', 'Ticket type', 'select', { required: true, options: ['Airfare', 'Airticket'], showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
+          F('eligibilityType', 'Eligibility type', 'select', { required: true, options: ['12 Month', '24 months'], showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
+          F('airfareRate', 'Airfare rate', 'number', { showWhen: { key: 'airfareEligible', equals: 'Yes' }, hint: 'Amount per ticket' }),
+          F('familyAirfare', 'Family airfare', 'yn', { display: 'checkbox', showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
+          F('familyMembers', 'No. of family members', 'number', { required: true, showWhen: { key: 'familyAirfare', equals: 'Yes' } }),
+        ] },
+      ],
+    },
+    {
       key: 'documents', title: 'Documents', group: 'Compliance', hrOnly: false,
       description: 'Passport, visa, licences and other documents with issue and expiry dates.',
       groups: [
@@ -429,21 +443,7 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('twoFactorAuthentication', 'Two-factor authentication', 'select', { optionsParameter: 'Two-Factor Authentication' }),
         ] },
       ],
-    },
-    {
-      key: 'airfare', title: 'AirFare', group: 'Benefits', hrOnly: false,
-      description: 'Air ticket eligibility, ticket type, eligibility period and rate, and family tickets.',
-      groups: [
-        { title: 'Airfare eligibility', fields: [
-          F('airfareEligible', 'Airfare eligibility', 'yn', { display: 'checkbox' }),
-          F('ticketType', 'Ticket type', 'select', { required: true, options: ['Airfare', 'Airticket'], showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
-          F('eligibilityType', 'Eligibility type', 'select', { required: true, options: ['12 Month', '24 months'], showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
-          F('airfareRate', 'Airfare rate', 'number', { showWhen: { key: 'airfareEligible', equals: 'Yes' }, hint: 'Amount per ticket' }),
-          F('familyAirfare', 'Family airfare', 'yn', { display: 'checkbox', showWhen: { key: 'airfareEligible', equals: 'Yes' } }),
-          F('familyMembers', 'No. of family members', 'number', { required: true, showWhen: { key: 'familyAirfare', equals: 'Yes' } }),
-        ] },
-      ],
-    },
+    }
   ];
 }
 

@@ -103,15 +103,25 @@ export interface LeaveApplication {
   requestedDays: number;
   sandwichDays: number;
   totalDays: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  /** PENDING: waiting for the manager. MANAGER_APPROVED: the manager approved, waiting for HR to confirm. */
+  status: 'PENDING' | 'MANAGER_APPROVED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   reason: string | null;
   decisionNote: string | null;
+  managerNote?: string | null;
+  managerDecidedAt?: string | null;
   createdAt: string;
   calculation: CalcDay[];
   /** A supporting document (for example a medical certificate) is attached. */
   variant: string | null;
   hasAttachment: boolean;
   attachmentName: string | null;
+  /** Every supporting document of the leave. */
+  attachments: LeaveDocument[];
+}
+
+export interface LeaveDocument {
+  id: number;
+  name: string;
 }
 
 export interface LedgerRow {
@@ -160,6 +170,8 @@ export const getCompOff = (scope: 'me' | 'team') => request<CompOffRow[]>(`/leav
 export const getBalancesOf = (employeeId: number) => request<LeaveBalance[]>(`/leave/balances/${employeeId}`);
 export const previewLeave = (p: LeaveRequestPayload) => request<LeavePreview>('/leave/preview', { method: 'POST', body: json(p) });
 export const applyLeave = (p: LeaveRequestPayload) => request<LeaveApplication>('/leave/applications', { method: 'POST', body: json(p) });
+/** Edits a leave that is still waiting for a decision (the server checks it again). */
+export const updateLeave = (id: number, p: LeaveRequestPayload) => request<LeaveApplication>(`/leave/applications/${id}`, { method: 'PUT', body: json(p) });
 export interface MyLeaveFilters {
   status?: string;
   leaveTypeId?: string;
@@ -211,19 +223,38 @@ export const REASON_TEXT: Record<CalcDay['reason'], string> = {
   SANDWICH_HOLIDAY: 'Holiday counted (sandwich)',
 };
 
-/** Attach (or replace) the supporting document of a leave that is waiting for a decision. PDF, JPG or PNG, up to 10 MB. */
+/** Adds a supporting document to a leave that is waiting for a decision. PDF, JPG or PNG, up to 10 MB. Several may be added. */
 export function uploadLeaveDocument(id: number, file: File) {
   const form = new FormData();
   form.append('file', file);
-  return request<{ name: string }>(`/leave/applications/${id}/attachment`, { method: 'POST', body: form });
+  return request<{ id: number; name: string }>(`/leave/applications/${id}/attachment`, { method: 'POST', body: form });
 }
 
-/** Opens the supporting document in a new tab (it needs the access token, so it is fetched first). */
-export async function openLeaveDocument(id: number) {
+/** How a leave stage reads on screen. */
+export const LEAVE_STATUS_LABEL: Record<LeaveApplication['status'], string> = {
+  PENDING: 'Waiting for manager',
+  MANAGER_APPROVED: 'Waiting for HR',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled',
+};
+
+/** The documents of a leave: id and name. */
+export function listLeaveDocuments(id: number) {
+  return request<LeaveDocument[]>(`/leave/applications/${id}/attachments`);
+}
+
+/** Removes one document from a leave that is waiting for a decision. */
+export function removeLeaveDocument(id: number, fileId: number) {
+  return request<null>(`/leave/applications/${id}/attachments/${fileId}`, { method: 'DELETE' });
+}
+
+/** One document as an object URL, for the document viewer popup (needs the access token). */
+export async function leaveDocumentUrl(id: number, fileId: number): Promise<string> {
   const token = getAccessToken();
-  const res = await fetch(`${API_BASE_URL}/leave/applications/${id}/attachment`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
+  const res = await fetch(`${API_BASE_URL}/leave/applications/${id}/attachments/${fileId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
   if (!res.ok) throw new Error('Could not open the document');
-  window.open(URL.createObjectURL(await res.blob()), '_blank');
+  return URL.createObjectURL(await res.blob());
 }
 
 /** Days to at most 2 decimals (27.450000000000003 shows as 27.45). */

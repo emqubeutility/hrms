@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth';
 import { getEmployees, request } from '../lib/api';
 import { UserType } from '../lib/user-types';
 import { DashboardSummary, NotificationItem, getDashboard, getNotifications } from '../lib/dashboard-api';
+import { fmtDays } from '../lib/leave-api';
 
 /*
  * Dashboard (matches ui-mockups/hrms-dashboard-v2.html).
@@ -337,7 +338,7 @@ export default function DashboardPage() {
               {mine?.balances.map((b) => (
                 <div key={b.leaveTypeId} className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-700">
                   <span>{b.name}</span>
-                  <b className="text-gray-900">{b.balance} days</b>
+                  <b className="text-gray-900">{fmtDays(b.balance)} days</b>
                 </div>
               ))}
             </div>
