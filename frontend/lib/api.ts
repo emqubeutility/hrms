@@ -1,3 +1,4 @@
+import { toastBridge } from './toast';
 // Vercel service binding is available at runtime in server functions only.
 // Browser requests use the same-origin /api/v1 path that Vercel rewrites to the backend service.
 // Under `next dev` there is no Vercel rewrite, so the browser calls the API on port 3000 directly.
@@ -307,17 +308,32 @@ export function setSelectedBranchId(id: number | null) {
   }
 }
 
+/** Calls that only read or check something even though they are POSTs: they never show a toast. */
+const QUIET_PATH = /\/preview|\/validate|\/auth\/|\?commit=false|\/entitlement/i;
+
+export type RequestOptions = RequestInit & {
+  /** No toast for this call (the page shows its own message). */
+  silent?: boolean;
+};
+
+/**
+ * Every call to the API goes through here. A change (POST, PUT, PATCH, DELETE) that works shows the backend's message as a
+ * toast, and one that fails shows the error. Reading (GET) stays quiet, so pages keep their own loading and error states.
+ */
 export async function request<T>(
   path: string,
-  options: RequestInit = {},
+  options: RequestOptions = {},
   isRetry = false,
 ): Promise<ApiEnvelope<T>> {
+  const { silent, ...init } = options;
+  const isChange = (init.method ?? 'GET').toUpperCase() !== 'GET';
+  const toastIt = isChange && !silent && !QUIET_PATH.test(path);
   const url = `${API_BASE_URL}${path}`;
   const token = getAccessToken();
   const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string>),
+    ...(init.headers as Record<string, string>),
   };
-  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+  if (!(init.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
   if (token) {
@@ -326,7 +342,7 @@ export async function request<T>(
   const branchId = typeof window !== 'undefined' ? getSelectedBranchId() : null;
   if (branchId !== null) headers['X-Branch-Id'] = String(branchId);
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...init, headers });
   const json = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -341,9 +357,12 @@ export async function request<T>(
     }
     const error = new Error(json?.message?.text || response.statusText) as Error & { errors?: FieldErrorItem[] };
     error.errors = json?.errors;
+    if (toastIt) toastBridge.error(error.message);
     throw error;
   }
 
+  const text = typeof json?.message?.text === 'string' ? json.message.text.trim() : '';
+  if (toastIt && text && !/^(ok|success)$/i.test(text)) toastBridge.success(text);
   return json as ApiEnvelope<T>;
 }
 

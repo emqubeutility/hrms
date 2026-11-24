@@ -49,7 +49,6 @@ export default function MyAttendancePage() {
     try {
       await requestCorrection({ date: req.date, inTime: req.inTime || undefined, outTime: req.outTime || undefined, reason: req.reason.trim() });
       setReq(null);
-      setNotice('Request sent to your manager');
       loadFixes();
     } catch (e: any) {
       setError(e.message || 'Could not send the request');

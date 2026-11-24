@@ -55,7 +55,6 @@ export default function BranchesPanel() {
       if (editing.id === null) await createBranch(payload);
       else await updateBranch(editing.id, payload);
       setEditing(null);
-      setNotice('Branch saved');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save');
@@ -70,7 +69,6 @@ export default function BranchesPanel() {
     setNotice('');
     try {
       await deleteBranch(b.id);
-      setNotice('Branch deleted');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not delete');

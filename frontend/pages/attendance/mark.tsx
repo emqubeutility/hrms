@@ -73,7 +73,6 @@ export default function MarkAttendancePage() {
       const wasIn = state.next === 'IN';
       const res = await markAttendance({ coordinates: c || undefined, mood: wasIn && mood ? mood : undefined });
       setState(res.data);
-      setNotice(wasIn ? 'You are marked IN.' : 'You are marked OUT.');
     } catch (e: any) {
       setError(e.message || 'Could not mark attendance');
     } finally {

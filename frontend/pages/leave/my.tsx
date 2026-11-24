@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { LEAVE_STATUS_LABEL, LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, fmtDays, uploadLeaveDocument, updateLeave, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
@@ -31,7 +32,11 @@ export default function MyLeavePage() {
   const [error, setError] = useState('');
   // Leave whose documents are open in the popup (id of the leave application, and a label for the title).
   const [docsFor, setDocsFor] = useState<{ id: number; label: string } | null>(null);
-  const [notice, setNotice] = useState('');
+  const toast = useToast();
+  /** This page's own messages (more helpful than the default) appear as toasts. */
+  const setNotice = (m: string) => {
+    if (m) toast.success(m);
+  };
   const [busy, setBusy] = useState(false);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [applying, setApplying] = useState(false);
@@ -155,7 +160,6 @@ export default function MyLeavePage() {
       </div>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-      {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {balances.filter((b) => b.balanceTracking).map((b) => (

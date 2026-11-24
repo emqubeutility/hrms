@@ -369,7 +369,6 @@ export default function EmployeeProfilePage() {
       setSaved((prev) => ({ ...prev, [current.key]: cloneJson(res.data.values) }));
       setSavedCustom((prev) => ({ ...prev, ...cloneJson(customForSection) }));
       setSavedAt((prev) => ({ ...prev, [current.key]: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }));
-      setNotice(`${current.title} saved`);
       toast.success(`${current.title} saved`);
       if (data.employee.country && current.key === 'organization') {
         getEmployeeProfile(data.employee.id).then((r) => setData(r.data));

@@ -112,7 +112,6 @@ export default function OvertimePanel() {
     try {
       if (editingId === 'new') await createOvertimeConfiguration(payload);
       else await updateOvertimeConfiguration(editingId as number, payload);
-      setNotice(editingId === 'new' ? 'Overtime configuration created' : 'Overtime configuration saved');
       setEditingId(null);
       await load();
     } catch (err: any) {
@@ -127,7 +126,6 @@ export default function OvertimePanel() {
     setNotice('');
     try {
       await updateOvertimeConfiguration(c.id, { isActive: !c.isActive });
-      setNotice(`"${c.name}" ${c.isActive ? 'deactivated' : 'activated'}`);
       await load();
     } catch (err: any) {
       setError(err.message || 'Could not update status');

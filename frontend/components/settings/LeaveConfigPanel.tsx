@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { getParameters } from '../../lib/api';
+import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { UserType } from '../../lib/user-types';
 import { CountryItem, getCountries } from '../../lib/api';
@@ -49,7 +50,11 @@ export default function LeaveConfigPanel() {
   const [settings, setSettings] = useState<LeaveSettings | null>(null);
   const [editing, setEditing] = useState<{ id: number | null; form: LeaveTypePayload } | null>(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const toast = useToast();
+  /** Messages (saved, accrual result) appear as toasts; an empty message does nothing. */
+  const setNotice = (m: string) => {
+    if (m) toast.success(m);
+  };
   const [saving, setSaving] = useState(false);
   const [countries, setCountries] = useState<CountryItem[]>([]);
 
@@ -85,7 +90,6 @@ export default function LeaveConfigPanel() {
       if (editing.id === null) await createLeaveType(payload);
       else await updateLeaveType(editing.id, payload);
       setEditing(null);
-      setNotice('Leave type saved');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save');
@@ -100,7 +104,6 @@ export default function LeaveConfigPanel() {
     setNotice('');
     try {
       await saveLeaveSettings({ ...settings, compOffCreditDays: Number(settings.compOffCreditDays), compOffExpiryDays: settings.compOffExpiryDays ? Number(settings.compOffExpiryDays) : null });
-      setNotice('Settings saved');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save');
@@ -117,7 +120,6 @@ export default function LeaveConfigPanel() {
     setNotice('');
     try {
       await deleteLeaveType(t.id);
-      setNotice('Leave type deleted');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not delete');
@@ -154,7 +156,6 @@ export default function LeaveConfigPanel() {
         ))}
       </div>
       {error && !editing && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-      {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

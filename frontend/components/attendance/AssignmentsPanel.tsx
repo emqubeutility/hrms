@@ -197,7 +197,6 @@ export default function AssignmentsPanel() {
     setNotice('');
     try {
       await fn();
-      setNotice(ok);
       await reload();
     } catch (e: any) {
       setError(e.message || 'Something went wrong');
@@ -218,7 +217,6 @@ export default function AssignmentsPanel() {
         failed.push(`${names[id] ?? id}: ${e.message || 'failed'}`);
       }
     }
-    if (done) setNotice(`${ok} for ${done} employee${done === 1 ? '' : 's'}`);
     if (failed.length) setError(`Not done for ${failed.length}: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '…' : ''}`);
   };
 
@@ -242,7 +240,6 @@ export default function AssignmentsPanel() {
     setNotice('');
     try {
       await fn();
-      setNotice(ok);
       await loadGroups();
     } catch (e: any) {
       setError(e.message || 'Something went wrong');

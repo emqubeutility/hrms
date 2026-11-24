@@ -106,7 +106,6 @@ export default function LeaveBalancesPanel() {
     }
     setSaving(false);
     if (done) {
-      setNotice(done === 1 ? 'Balance adjusted' : `Balance adjusted for ${done} employees`);
       setAdj({ leaveTypeId: adj.leaveTypeId, days: '', note: '', expiresOn: '' });
       await load();
     }

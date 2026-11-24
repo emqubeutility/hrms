@@ -67,7 +67,6 @@ export default function RostersPanel() {
       const payload = { name: name.trim(), cycleDays, isActive, days: days.map((d, i) => (d === OFF ? { dayIndex: i, isWeeklyOff: true } : { dayIndex: i, shiftId: Number(d), isWeeklyOff: false })) };
       if (editing === 'new') await createRosterPattern(payload);
       else await updateRosterPattern(editing as number, payload);
-      setNotice('Roster pattern saved');
       setEditing(null);
       await load();
     } catch (e: any) {

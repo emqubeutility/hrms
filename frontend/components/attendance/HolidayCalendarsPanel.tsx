@@ -89,7 +89,6 @@ export default function HolidayCalendarsPanel() {
       const r = await saveHolidayOrder(order);
       setOrder(r.data);
       setSavedOrder(JSON.stringify(r.data));
-      setNotice('Calendar order saved. It applies to every employee straight away.');
     } catch (e: any) {
       setError(e.message || 'Could not save the order');
     }
@@ -121,7 +120,6 @@ export default function HolidayCalendarsPanel() {
         if (selected?.id === editing) await open(editing as number);
       }
       setEditing(null);
-      setNotice('Calendar saved');
       await loadCalendars();
     } catch (e: any) {
       setError(e.message || 'Could not save');

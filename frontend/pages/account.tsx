@@ -41,7 +41,6 @@ export default function AccountPage() {
     setBusy(true);
     try {
       const res = await revokeOtherSessions();
-      setMessage({ type: 'ok', text: `Signed out ${res.data.revoked} other session(s)` });
       await load();
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Could not sign out other sessions' });

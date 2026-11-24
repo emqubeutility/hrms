@@ -112,7 +112,6 @@ export default function ShiftsPanel() {
     try {
       if (editingId === 'new') await createShift(payload);
       else await updateShift(editingId as number, payload);
-      setNotice(editingId === 'new' ? 'Shift created' : 'Shift saved');
       setEditingId(null);
       await load();
     } catch (err: any) {
@@ -128,10 +127,8 @@ export default function ShiftsPanel() {
     try {
       if (s.isActive) {
         await deactivateShift(s.id);
-        setNotice(`"${s.name}" deactivated`);
       } else {
         await updateShift(s.id, { isActive: true });
-        setNotice(`"${s.name}" activated`);
       }
       await load();
     } catch (err: any) {
@@ -145,7 +142,6 @@ export default function ShiftsPanel() {
     setNotice('');
     try {
       await deleteMaster('shifts', s.id);
-      setNotice(`"${s.name}" deleted`);
       await load();
     } catch (err: any) {
       setError(err.message || 'Could not delete');

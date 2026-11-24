@@ -61,7 +61,6 @@ export default function TeamLeavePage() {
     setNotice('');
     try {
       await decideLeave(a.id, approve, note[a.id]);
-      setNotice(`${a.employeeName}: ${a.leaveType.name} ${approve ? 'approved' : 'rejected'}`);
       await loadWaiting();
     } catch (e: any) {
       setError(e.message || 'Could not save the decision');

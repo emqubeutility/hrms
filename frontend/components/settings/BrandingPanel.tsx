@@ -71,7 +71,6 @@ export default function BrandingPanel() {
       if (formats.number && formats.number.value.trim() !== savedFormats.number) await updateSystemConfiguration(formats.number.id, { value: formats.number.value.trim() });
       setSavedFormats({ time: formats.time?.value ?? '', number: formats.number?.value.trim() ?? '' });
       setBranding(res.data);
-      setMessage('Branding updated.');
       reloadBranding();
     } catch (err: any) {
       setError(err.message || 'Could not update branding');
@@ -86,7 +85,6 @@ export default function BrandingPanel() {
     try {
       const res = await uploadBrandingLogo(file);
       setBranding(res.data);
-      setMessage('Logo uploaded.');
       reloadBranding();
     } catch (err: any) {
       setError(err.message || 'Could not upload logo');
@@ -99,7 +97,6 @@ export default function BrandingPanel() {
     try {
       const res = await uploadBrandingFavicon(file);
       setBranding(res.data);
-      setMessage('Favicon uploaded.');
       reloadBranding();
     } catch (err: any) {
       setError(err.message || 'Could not upload favicon');

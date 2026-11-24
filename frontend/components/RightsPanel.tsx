@@ -80,7 +80,6 @@ export default function RightsPanel() {
       }));
       await setMenuPermissions(userTypeId, permissions);
       setSavedSnapshot(JSON.stringify(selection));
-      setMessage({ type: 'ok', text: 'Rights saved' });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Save failed' });
     } finally {

@@ -135,7 +135,7 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
           fileFailed = e.message || 'upload failed';
         }
       }
-      setNotice(fileFailed ? `Document saved, but the file was not uploaded: ${fileFailed}. Use "Attach file" to retry.` : 'Document saved');
+      if (fileFailed) setNotice(`Document saved, but the file was not uploaded: ${fileFailed}. Use "Attach file" to retry.`);
       reset();
       await load();
     } catch (e: any) {
@@ -155,7 +155,6 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
     setError('');
     try {
       await attachDocumentFile(doc.id, f);
-      setNotice('File attached');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not attach file');
@@ -169,7 +168,6 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
     if (!window.confirm(`Remove this ${doc.documentType.name} document?`)) return;
     try {
       await deactivateDocument(doc.id);
-      setNotice('Document removed');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not remove document');

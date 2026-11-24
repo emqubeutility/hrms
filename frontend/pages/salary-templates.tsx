@@ -76,10 +76,8 @@ export default function SalaryTemplatesPage() {
       const payload = { name: form.name.trim(), countryCode: form.countryCode, components };
       if (form.id) {
         await updateSalaryTemplate(form.id, payload);
-        setMessage(`Template “${payload.name}” updated.`);
       } else {
         await createSalaryTemplate(payload);
-        setMessage(`Template “${payload.name}” created. HR can now choose it on the Compensation tab.`);
       }
       setForm(blank());
       load();

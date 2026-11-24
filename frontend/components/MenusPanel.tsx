@@ -107,10 +107,8 @@ export default function MenusPanel() {
     try {
       if (editingId === 'new') {
         await createMenuItem(payload);
-        setNotice('Menu item created');
       } else if (editingId !== null) {
         await updateMenuItem(editingId, payload);
-        setNotice('Menu item saved');
       }
       setEditingId(null);
       await load();

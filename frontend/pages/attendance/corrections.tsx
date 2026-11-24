@@ -32,7 +32,6 @@ export default function CorrectionRequestsPage() {
     setNotice('');
     try {
       await decideCorrection(r.id, approve, note[r.id]);
-      setNotice(`${r.employeeName}, ${r.date}: ${approve ? 'approved and applied' : 'rejected'}`);
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save the decision');

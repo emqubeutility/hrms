@@ -69,7 +69,6 @@ export default function CustomFieldsPage() {
         placeholder: form.placeholder || undefined,
         helpText: form.helpText || undefined,
       });
-      setMessage(`Custom field ${created.data.code} added. It now appears on the employee profile.`);
       setForm(blank);
       load();
     } catch (err: any) {

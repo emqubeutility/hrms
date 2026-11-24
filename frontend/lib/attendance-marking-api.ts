@@ -61,7 +61,7 @@ export const getMyAttendance = (from: string, to: string) => request<AttendanceR
 export const getTeamAttendance = (from: string, to: string, employeeId?: number) =>
   request<AttendanceRow[]>(`/attendance/records/team?from=${from}&to=${to}${employeeId ? `&employeeId=${employeeId}` : ''}`);
 export const editAttendance = (employeeId: number, date: string, p: { inTime?: string; outTime?: string; statusCode?: string; remarks?: string; compOffEligible?: boolean }) =>
-  request<AttendanceRecord>(`/attendance/records/${employeeId}/${date}`, { method: 'PUT', body: JSON.stringify(p) });
+  request<AttendanceRecord>(`/attendance/records/${employeeId}/${date}`, { method: 'PUT', body: JSON.stringify(p), silent: true });
 
 /* ------------------------------------------------------------------ configuration (System Admin) */
 

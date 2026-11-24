@@ -93,7 +93,6 @@ export default function WorkSchedulesPanel() {
       };
       if (editing === 'new') await createWorkSchedule(payload);
       else await updateWorkSchedule(editing as number, payload);
-      setNotice(editing === 'new' ? 'Work schedule added' : 'Work schedule saved');
       setEditing(null);
       await load();
     } catch (e: any) {

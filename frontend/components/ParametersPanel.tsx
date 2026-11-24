@@ -76,7 +76,6 @@ export default function ParametersPanel() {
     try {
       if (editing === 'new') await createParameter({ parameterTypeId: typeId!, text: form.text.trim(), code: form.code.trim() });
       else await updateParameter(editing as number, { text: form.text.trim(), code: form.code.trim() });
-      setNotice(editing === 'new' ? 'Option added' : 'Option saved');
       setEditing(null);
       await load(typeId!);
     } catch (e: any) {
@@ -92,7 +91,6 @@ export default function ParametersPanel() {
     setNotice('');
     try {
       await deleteMaster('parameters', r.id);
-      setNotice(`"${r.text}" deleted`);
       await load(typeId!);
     } catch (e: any) {
       setError(e.message || 'Could not delete');

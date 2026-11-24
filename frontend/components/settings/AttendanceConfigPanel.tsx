@@ -91,7 +91,6 @@ export default function AttendanceConfigPanel() {
     setNotice('');
     try {
       await fn();
-      setNotice(ok);
       await load();
     } catch (e: any) {
       setError(e.message || 'Something went wrong');
@@ -129,7 +128,6 @@ export default function AttendanceConfigPanel() {
       if (editing.id === null) await createPolicy(payload);
       else await updatePolicy(editing.id, payload);
       setEditing(null);
-      setNotice('Policy saved. It applies from now on; days already recorded keep the version they used.');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save');
@@ -151,7 +149,6 @@ export default function AttendanceConfigPanel() {
         effectiveTo: asg.effectiveTo || undefined,
       });
       setAssigning(null);
-      setNotice('Policy assigned');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not assign');

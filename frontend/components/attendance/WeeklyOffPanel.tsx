@@ -126,7 +126,6 @@ export default function WeeklyOffPanel() {
       if (editing === 'new') await createWeeklyOffTemplate(payload);
       else await updateWeeklyOffTemplate(editing as number, payload);
       setEditing(null);
-      setNotice('Weekly off template saved');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save');
@@ -141,7 +140,6 @@ export default function WeeklyOffPanel() {
     setNotice('');
     try {
       await deleteWeeklyOffTemplate(t.id);
-      setNotice('Template deleted');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not delete');

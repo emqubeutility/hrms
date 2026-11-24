@@ -60,7 +60,6 @@ export default function LeavePoliciesPanel() {
       if (editing.id === null) await createLeavePolicy(payload);
       else await updateLeavePolicy(editing.id, payload);
       setEditing(null);
-      setNotice('Policy saved');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not save');
@@ -74,7 +73,6 @@ export default function LeavePoliciesPanel() {
     setError('');
     try {
       await deleteLeavePolicy(p.id);
-      setNotice('Policy deleted');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not delete');

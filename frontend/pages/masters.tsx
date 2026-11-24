@@ -143,7 +143,6 @@ export default function MastersPage() {
         if (editingId === 'new') await (create as typeof createSite)(payload);
         else await (update as typeof updateSite)(editingId as number, payload);
       }
-      setNotice(editingId === 'new' ? 'Item created' : 'Item saved');
       setEditingId(null);
       await loadAll();
     } catch (err: any) {
@@ -159,10 +158,8 @@ export default function MastersPage() {
     try {
       if (item.isActive) {
         await api[activeTab].deactivate(item.id);
-        setNotice(`"${item.name}" deactivated`);
       } else {
         await (api[activeTab].update as typeof updateSite)(item.id, { isActive: true });
-        setNotice(`"${item.name}" activated`);
       }
       await loadAll();
     } catch (err: any) {
@@ -176,7 +173,6 @@ export default function MastersPage() {
     setNotice('');
     try {
       await deleteMaster(activeTab, item.id);
-      setNotice(`"${item.name}" deleted`);
       await loadAll();
     } catch (err: any) {
       setError(err.message || 'Could not delete');

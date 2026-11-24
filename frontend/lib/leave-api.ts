@@ -169,9 +169,9 @@ export interface CompOffRow {
 export const getCompOff = (scope: 'me' | 'team') => request<CompOffRow[]>(`/leave/comp-off?scope=${scope}`);
 export const getBalancesOf = (employeeId: number) => request<LeaveBalance[]>(`/leave/balances/${employeeId}`);
 export const previewLeave = (p: LeaveRequestPayload) => request<LeavePreview>('/leave/preview', { method: 'POST', body: json(p) });
-export const applyLeave = (p: LeaveRequestPayload) => request<LeaveApplication>('/leave/applications', { method: 'POST', body: json(p) });
+export const applyLeave = (p: LeaveRequestPayload) => request<LeaveApplication>('/leave/applications', { method: 'POST', body: json(p), silent: true });
 /** Edits a leave that is still waiting for a decision (the server checks it again). */
-export const updateLeave = (id: number, p: LeaveRequestPayload) => request<LeaveApplication>(`/leave/applications/${id}`, { method: 'PUT', body: json(p) });
+export const updateLeave = (id: number, p: LeaveRequestPayload) => request<LeaveApplication>(`/leave/applications/${id}`, { method: 'PUT', body: json(p), silent: true });
 export interface MyLeaveFilters {
   status?: string;
   leaveTypeId?: string;
@@ -198,10 +198,10 @@ export interface GroupTarget {
 export const getGroupCount = (t: GroupTarget) =>
   request<{ count: number }>(`/leave/adjust-group/count?scope=${t.scope}${t.branchId ? `&branchId=${t.branchId}` : ''}${t.siteId ? `&siteId=${t.siteId}` : ''}${t.countryCode ? `&countryCode=${encodeURIComponent(t.countryCode)}` : ''}`);
 export const adjustGroup = (p: GroupTarget & { leaveTypeId: number; days: number; note: string; expiresOn?: string }) =>
-  request<{ total: number; done: number; failed: { employeeId: number; code: string; reason: string }[] }>('/leave/adjust-group', { method: 'POST', body: json(p) });
+  request<{ total: number; done: number; failed: { employeeId: number; code: string; reason: string }[] }>('/leave/adjust-group', { method: 'POST', silent: true, body: json(p) });
 export const adjustBalance = (p: { employeeId: number; leaveTypeId: number; days: number; note: string; expiresOn?: string }) => request<LeaveBalance[]>('/leave/adjust', { method: 'POST', body: json(p) });
-export const runAccrual = (asOf?: string) => request<{ asOf: string; leaveYear: string; credited: number; alreadyCredited: number }>('/leave/accrual', { method: 'POST', body: json({ asOf }) });
-export const syncCompOff = () => request<{ granted: number }>('/leave/comp-off/sync', { method: 'POST' });
+export const runAccrual = (asOf?: string) => request<{ asOf: string; leaveYear: string; credited: number; alreadyCredited: number }>('/leave/accrual', { method: 'POST', body: json({ asOf }), silent: true });
+export const syncCompOff = () => request<{ granted: number }>('/leave/comp-off/sync', { method: 'POST', silent: true });
 
 export const getLeaveConfig = () => request<{ types: LeaveType[]; settings: LeaveSettings }>('/leave-config');
 export const createLeaveType = (p: LeaveTypePayload) => request<LeaveType>('/leave-config/types', { method: 'POST', body: json(p) });

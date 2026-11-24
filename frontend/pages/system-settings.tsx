@@ -91,7 +91,6 @@ export default function SystemSettingsPage() {
         await updateSystemConfiguration(i.id, { value: (drafts[i.id] ?? '').trim() });
         done.push(i.name);
       }
-      setMessage(`Saved: ${done.join(', ')}.`);
     } catch (err: any) {
       const failed = changed[done.length]?.name;
       setError(`${failed ? `"${failed}": ` : ''}${err.message || 'Could not save'}${done.length ? ` (already saved: ${done.join(', ')})` : ''}`);

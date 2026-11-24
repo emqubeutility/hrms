@@ -35,7 +35,6 @@ export default function ModulesPage() {
     setTogglingKey(m.moduleKey);
     try {
       await updateModuleConfiguration(m.moduleKey, !m.isEnabled);
-      setMessage(`${m.name} ${!m.isEnabled ? 'enabled' : 'disabled'}.`);
       load();
     } catch (err: any) {
       setError(err.message || `Could not update ${m.name}`);

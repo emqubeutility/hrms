@@ -95,7 +95,6 @@ export default function ProfileRulesPage() {
       const m = toMap(res.data.rules);
       setOverrides(m);
       setSaved(m);
-      setNotice(`Rules saved for ${countryName}. They apply to employees of this country straight away.`);
     } catch (e: any) {
       setError(e.message || 'Could not save rules');
     } finally {
@@ -111,7 +110,6 @@ export default function ProfileRulesPage() {
       setCatalog(res.data);
       setOverrides({});
       setSaved({});
-      setNotice('Reset to defaults');
     } catch (e: any) {
       setError(e.message || 'Could not reset');
     }

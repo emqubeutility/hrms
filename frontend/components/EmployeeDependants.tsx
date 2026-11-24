@@ -113,7 +113,6 @@ export default function EmployeeDependants({ employeeId, canEdit }: { employeeId
     try {
       if (editing === 'new') await createEmployeeDependant(employeeId, payload);
       else await updateEmployeeDependant(employeeId, editing as number, payload);
-      setNotice(editing === 'new' ? 'Dependent added' : 'Dependent updated');
       setEditing(null);
       await load();
     } catch (e: any) {
@@ -128,7 +127,6 @@ export default function EmployeeDependants({ employeeId, canEdit }: { employeeId
     setError('');
     try {
       await deleteEmployeeDependant(employeeId, d.id);
-      setNotice('Dependent removed');
       await load();
     } catch (e: any) {
       setError(e.message || 'Could not remove dependent');
