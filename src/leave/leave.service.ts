@@ -13,7 +13,7 @@ import { AdjustBalanceDto, AdjustGroupDto, LeaveRequestDto } from './dto/leave.d
 import { EntitlementService } from './entitlement.service';
 import { MONTHLY_LUMP, addMonthsIso, lastMonthToCredit } from './entitlement-rules';
 import { CarryRule, pickCarryRule } from './leave-formula';
-import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, isoAdd, leaveYear, monthlyCredit } from './leave-rules';
+import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, daysProblem, eventDateProblem, genderProblem, isoAdd, leaveYear, monthlyCredit, timesInServiceProblem, variantProblem } from './leave-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
 
@@ -166,9 +166,8 @@ export class LeaveService {
     await this.checkConditions(employeeId, type, dto, excludeApplicationId);
     const { result, noRoster } = await this.calculate(employeeId, type, dto.fromDate, dto.toDate, halfDay, excludeApplicationId);
     if (result.totalDays <= 0) throw new BadRequestException('The days you chose are all off days or holidays, so there is no leave to take');
-    const chosen = ((type.variants as { label: string; maxDays: number }[]) ?? []).find((v) => v.label === dto.variant);
-    if (chosen && result.totalDays > chosen.maxDays) throw new BadRequestException(`${type.name} (${chosen.label}) can be at most ${chosen.maxDays} days`);
-    if (type.maxDaysPerRequest && result.totalDays > type.maxDaysPerRequest) throw new BadRequestException(`${type.name} can be at most ${type.maxDaysPerRequest} days at a time`);
+    const daysError = daysProblem(type, dto.variant, result.totalDays);
+    if (daysError) throw new BadRequestException(daysError);
     const overlap = await this.prisma.leaveApplication.findFirst({ where: { employeeId, status: { in: [...OPEN_STATUSES, 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, fromDate: { lte: to }, toDate: { gte: from } } });
     if (overlap) throw new ConflictException(`You already have leave from ${toIsoDate(overlap.fromDate)} to ${toIsoDate(overlap.toDate)} that overlaps these dates`);
     return { type, result, noRoster, from, to, halfDay };
@@ -207,29 +206,25 @@ export class LeaveService {
   }
 
   /** The conditions a leave type puts on who can take it and when (gender, times in service, event window). */
-  private async checkConditions(employeeId: number, type: { id: number; name: string; variants: unknown; variantLabel: string | null; unlockAfterTypeIds: number[]; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
-    const variants = (type.variants as { label: string; maxDays: number }[]) ?? [];
-    if (variants.length && !variants.some((v) => v.label === dto.variant)) throw new BadRequestException(`Choose the ${(type.variantLabel || 'option').toLowerCase()} for ${type.name}`);
+  private async checkConditions(employeeId: number, type: { id: number; name: string; variants: unknown; variantLabel: string | null; maxDaysPerRequest: number | null; unlockAfterTypeIds: number[]; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
+    const variantError = variantProblem(type, dto.variant);
+    if (variantError) throw new BadRequestException(variantError);
     if (type.unlockAfterTypeIds.length) {
       const first = await this.firstUnexhausted(employeeId, type.unlockAfterTypeIds);
       if (first) throw new BadRequestException(`${type.name} can be used only after ${first} is used up`);
     }
     if (type.genderRestriction) {
       const p = await this.prisma.employeeProfileSection.findUnique({ where: { employeeId_sectionKey: { employeeId, sectionKey: 'personal' } }, select: { data: true } });
-      const gender = (p?.data as { gender?: unknown } | null)?.gender;
-      if (typeof gender !== 'string' || gender.trim().toLowerCase() !== type.genderRestriction.trim().toLowerCase()) throw new BadRequestException(`${type.name} is only for ${type.genderRestriction.toLowerCase()} employees`);
+      const genderError = genderProblem(type, (p?.data as { gender?: unknown } | null)?.gender);
+      if (genderError) throw new BadRequestException(genderError);
     }
     if (type.maxTimesInService) {
       const used = await this.prisma.leaveApplication.count({ where: { employeeId, leaveTypeId: type.id, status: { in: [...OPEN_STATUSES, 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined } });
-      if (used >= type.maxTimesInService) throw new BadRequestException(`${type.name} can be taken only ${type.maxTimesInService === 1 ? 'once' : type.maxTimesInService + ' times'} during employment, and you have already used it`);
+      const timesError = timesInServiceProblem(type, used);
+      if (timesError) throw new BadRequestException(timesError);
     }
-    if (type.eventWindowMonths) {
-      const label = type.eventLabel || 'Event date';
-      if (!dto.eventDate) throw new BadRequestException(`Give the ${label.toLowerCase()} for ${type.name}`);
-      if (dto.fromDate < dto.eventDate) throw new BadRequestException(`${type.name} cannot start before the ${label.toLowerCase()}`);
-      const last = addMonthsIso(dto.eventDate, type.eventWindowMonths);
-      if (dto.toDate > last) throw new BadRequestException(`${type.name} must be taken within ${type.eventWindowMonths} month(s) of the ${label.toLowerCase()} (by ${last})`);
-    }
+    const eventError = eventDateProblem(type, dto.fromDate, dto.toDate, dto.eventDate, addMonthsIso);
+    if (eventError) throw new BadRequestException(eventError);
   }
 
   /** Balance less what is waiting for a decision. `excludeApplicationId` leaves out the leave being edited, so its own days are not counted twice. */

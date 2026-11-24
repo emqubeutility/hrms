@@ -174,3 +174,63 @@ export const monthlyCredit = (annualDays: number): number => Math.round((annualD
 export const compOffExpiry = (creditedOn: string, expiryDays: number | null): string | null => (expiryDays ? isoAdd(creditedOn, expiryDays) : null);
 
 export { isoAdd };
+
+/* ------------------------------------------------------------------ per leave type rules (pure; the service asks these) */
+
+/** The leave type fields these checks read. */
+export interface LeaveTypeRules {
+  name: string;
+  variants: unknown;
+  variantLabel: string | null;
+  maxDaysPerRequest: number | null;
+  genderRestriction: string | null;
+  maxTimesInService: number | null;
+  eventWindowMonths: number | null;
+  eventLabel: string | null;
+}
+
+export interface LeaveVariant {
+  label: string;
+  maxDays: number;
+}
+
+const variantsOf = (type: LeaveTypeRules): LeaveVariant[] => (type.variants as LeaveVariant[]) ?? [];
+
+/** The choice the employee must make for this type (for example the relationship), or null when fine. */
+export function variantProblem(type: LeaveTypeRules, variant: string | null | undefined): string | null {
+  const variants = variantsOf(type);
+  if (variants.length && !variants.some((v) => v.label === variant)) return `Choose the ${(type.variantLabel || 'option').toLowerCase()} for ${type.name}`;
+  return null;
+}
+
+/** Longest leave: the chosen variant's limit, then the type's limit per request. */
+export function daysProblem(type: LeaveTypeRules, variant: string | null | undefined, totalDays: number): string | null {
+  const chosen = variantsOf(type).find((v) => v.label === variant);
+  if (chosen && totalDays > chosen.maxDays) return `${type.name} (${chosen.label}) can be at most ${chosen.maxDays} days`;
+  if (type.maxDaysPerRequest && totalDays > type.maxDaysPerRequest) return `${type.name} can be at most ${type.maxDaysPerRequest} days at a time`;
+  return null;
+}
+
+/** Only one gender may take the type (the Gender text in the employee's personal details). */
+export function genderProblem(type: LeaveTypeRules, gender: unknown): string | null {
+  if (!type.genderRestriction) return null;
+  if (typeof gender !== 'string' || gender.trim().toLowerCase() !== type.genderRestriction.trim().toLowerCase()) return `${type.name} is only for ${type.genderRestriction.toLowerCase()} employees`;
+  return null;
+}
+
+/** A limit over the whole employment: `used` is the number of earlier applications for this type. */
+export function timesInServiceProblem(type: LeaveTypeRules, used: number): string | null {
+  if (type.maxTimesInService && used >= type.maxTimesInService) return `${type.name} can be taken only ${type.maxTimesInService === 1 ? 'once' : type.maxTimesInService + ' times'} during employment, and you have already used it`;
+  return null;
+}
+
+/** An event the leave depends on (for example a child's birth): the leave starts after it, within the window. */
+export function eventDateProblem(type: LeaveTypeRules, fromDate: string, toDate: string, eventDate: string | null | undefined, addMonths: (d: string, n: number) => string): string | null {
+  if (!type.eventWindowMonths) return null;
+  const label = type.eventLabel || 'Event date';
+  if (!eventDate) return `Give the ${label.toLowerCase()} for ${type.name}`;
+  if (fromDate < eventDate) return `${type.name} cannot start before the ${label.toLowerCase()}`;
+  const last = addMonths(eventDate, type.eventWindowMonths);
+  if (toDate > last) return `${type.name} must be taken within ${type.eventWindowMonths} month(s) of the ${label.toLowerCase()} (by ${last})`;
+  return null;
+}
