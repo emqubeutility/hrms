@@ -32,6 +32,7 @@ const userSelect = {
   id: true,
   username: true,
   userTypeId: true,
+  devQuickLogin: true,
   profileId: true,
   isActive: true,
   mustChangePassword: true,
@@ -276,6 +277,7 @@ export class UsersService {
     if (branchChange) data.allBranches = branchChange.allBranches;
     if (changesType) data.userTypeId = dto.userTypeId;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.devQuickLogin !== undefined) data.devQuickLogin = dto.devQuickLogin;
 
     // Branch access is only touched when it was part of the request.
     const branchOps = branchChange

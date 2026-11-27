@@ -159,6 +159,17 @@ export default function UsersPage() {
     }
   };
 
+  /** Development only: offer or hide this user on the login page. */
+  const toggleDevLogin = async (u: User, checked: boolean) => {
+    setError('');
+    try {
+      await updateUser(u.id, { devQuickLogin: checked });
+      await loadUsers();
+    } catch (err: any) {
+      setError(err.message || 'Could not change the development login');
+    }
+  };
+
   const handleDeactivate = async (id: number) => {
     if (!confirm('Deactivate this user?')) return;
     try {
@@ -252,19 +263,20 @@ export default function UsersPage() {
               <th className="px-6 py-3 font-semibold text-gray-700">Username</th>
               <th className="px-6 py-3 font-semibold text-gray-700">User Type</th>
               <th className="px-6 py-3 font-semibold text-gray-700">Status</th>
+              <th className="px-6 py-3 font-semibold text-gray-700" title="Development only: shown on the login page for sign-in without a password">Dev login</th>
               <th className="px-6 py-3 font-semibold text-gray-700 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                   Loading...
                 </td>
               </tr>
             ) : users.length === 0 && pending.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                   No users found.
                 </td>
               </tr>
@@ -276,6 +288,7 @@ export default function UsersPage() {
                   <td className="px-6 py-4 text-gray-400">—</td>
                   <td className="px-6 py-4 text-gray-500">{c.accessRole ?? '—'}</td>
                   <td className="px-6 py-4"><span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Site access given, no login yet</span></td>
+                  <td className="px-6 py-4" />
                   <td className="px-6 py-4 text-right"><button onClick={() => startFor(c)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Create login</button></td>
                 </tr>
               ))}
@@ -294,6 +307,15 @@ export default function UsersPage() {
                     >
                       {u.isActive ? 'Active' : 'Inactive'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <input
+                      type="checkbox"
+                      aria-label={`Show ${u.username} on the development login page`}
+                      checked={!!u.devQuickLogin}
+                      onChange={(e) => toggleDevLogin(u, e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <button

@@ -11,6 +11,11 @@ export class UpdateUserDto {
   @IsBoolean()
   isActive?: boolean;
 
+  /** Development only: show this user on the login page for passwordless sign-in (ignored in production). */
+  @IsOptional()
+  @IsBoolean()
+  devQuickLogin?: boolean;
+
   /** Email on the account's profile, used for password reset emails. An empty text clears it. */
   @ValidateIf((o) => o.email !== undefined && o.email !== '')
   @IsEmail()

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
-import { forgotPassword } from '../lib/api';
+import { DevLoginOption, forgotPassword, getDevLogins } from '../lib/api';
 import { brandLogoSrc, useBranding } from '../lib/branding';
 import Modal from '../components/Modal';
 
@@ -25,7 +25,11 @@ const inputClass =
 export default function LoginPage() {
   const { branding } = useBranding();
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const { login, loginAsDev, isAuthenticated } = useAuth();
+  // Development only: users marked "Dev login". Empty (and nothing is shown) when the server does not allow it.
+  const [devUsers, setDevUsers] = useState<DevLoginOption[]>([]);
+  const [devBusy, setDevBusy] = useState('');
+  const [devError, setDevError] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   // Dev convenience only: default the password field unmasked in development so you can
@@ -40,10 +44,29 @@ export default function LoginPage() {
   const [resetMessage, setResetMessage] = useState('');
   const [resetOk, setResetOk] = useState(false);
 
+  useEffect(() => {
+    if (isAuthenticated) return;
+    getDevLogins()
+      .then((res) => setDevUsers(res.data ?? []))
+      .catch(() => setDevUsers([]));
+  }, [isAuthenticated]);
+
   if (isAuthenticated) {
     router.replace('/');
     return null;
   }
+
+  const signInAs = async (name: string) => {
+    setDevBusy(name);
+    setDevError('');
+    try {
+      const mustChangePassword = await loginAsDev(name);
+      router.replace(mustChangePassword ? '/change-password' : '/');
+    } catch (err: any) {
+      setDevError(err.message || 'Could not sign in');
+      setDevBusy('');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +188,44 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+
+        {devUsers.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+            <p className="text-sm font-semibold text-amber-900">Development sign-in</p>
+            <p className="mt-0.5 text-xs text-amber-800">Shown only on a development server. Signs in without a password.</p>
+            {devError && <p className="mt-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-700">{devError}</p>}
+            <table className="mt-3 w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wider text-amber-900/70">
+                <tr>
+                  <th className="pb-1.5 font-semibold">Role</th>
+                  <th className="pb-1.5 font-semibold">User</th>
+                  <th className="pb-1.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-200">
+                {devUsers.map((d) => (
+                  <tr key={d.username}>
+                    <td className="py-2 pr-2 text-gray-700">{d.role}</td>
+                    <td className="py-2 pr-2">
+                      <span className="font-medium text-gray-900">{d.name || d.username}</span>
+                      <span className="block font-mono text-xs text-gray-500">{d.username}</span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => signInAs(d.username)}
+                        disabled={!!devBusy}
+                        className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {devBusy === d.username ? 'Signing in…' : 'Login'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <p className="mt-6 text-center text-xs text-gray-400">Authorised users only. Activity is logged.</p>
       </div>

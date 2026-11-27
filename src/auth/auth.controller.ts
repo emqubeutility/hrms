@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { AllowPasswordChangeRequired } from '../common/decorators/allow-password-change-required.decorator';
 import { LoginDto } from './dto/login.dto';
+import { DevLoginDto } from './dto/dev-login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -39,6 +40,20 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Ip() ip: string, @Headers('user-agent') userAgent: string) {
     const result = await this.authService.login(dto, ip, userAgent);
+    return { data: result, message: { code: 'OK', text: 'Login successful' } };
+  }
+
+  /** Development only: the users offered on the login page. 404 in production. */
+  @Get('dev-logins')
+  async devLogins() {
+    return { data: await this.authService.devLogins(), message: { code: 'OK', text: 'Development logins' } };
+  }
+
+  /** Development only: sign in as a "Dev login" user without a password. 404 in production. */
+  @Post('dev-login')
+  @HttpCode(HttpStatus.OK)
+  async devLogin(@Body() dto: DevLoginDto, @Ip() ip: string, @Headers('user-agent') userAgent: string) {
+    const result = await this.authService.devLogin(dto.username, ip, userAgent);
     return { data: result, message: { code: 'OK', text: 'Login successful' } };
   }
 

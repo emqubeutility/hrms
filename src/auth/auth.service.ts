@@ -107,6 +107,16 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_LOGIN_MESSAGE);
     }
 
+    return this.completeLogin(user, now, ip, userAgent);
+  }
+
+  /** Opens the session once the person's identity is known (a checked password, or the development quick login). */
+  private async completeLogin(
+    user: { id: number; username: string; userTypeId: number; profileId: number; mustChangePassword: boolean },
+    now: Date,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<LoginResult> {
     const mustChangePassword = user.mustChangePassword;
     await this.prisma.$transaction([
       this.prisma.userActivity.upsert({
@@ -152,6 +162,36 @@ export class AuthService {
         profileId: user.profileId,
       },
     };
+  }
+
+  /** Development only: the users marked "Dev login". 404 unless the server allows it (never in production). */
+  async devLogins() {
+    if (!this.config.get<boolean>('app.devQuickLogin', false)) throw new NotFoundException();
+    const rows = await this.prisma.user.findMany({
+      where: { devQuickLogin: true, isActive: true },
+      orderBy: [{ userTypeId: 'asc' }, { username: 'asc' }],
+      select: { username: true, userType: { select: { name: true } }, profile: { select: { name: true, lastName: true } } },
+    });
+    return rows.map((r) => ({
+      username: r.username,
+      role: r.userType.name,
+      name: [r.profile.name, r.profile.lastName].filter(Boolean).join(' '),
+    }));
+  }
+
+  /** Development only: signs in as a "Dev login" user without a password. Same checks as a normal sign-in. */
+  async devLogin(username: string, ip?: string, userAgent?: string): Promise<LoginResult> {
+    if (!this.config.get<boolean>('app.devQuickLogin', false)) throw new NotFoundException();
+    const now = new Date();
+    const user = await this.prisma.user.findUnique({
+      where: { username: username.trim().toLowerCase() },
+      include: { profile: { select: { isSiteAccess: true } }, activity: true },
+    });
+    if (!user || !user.devQuickLogin || this.loginRefusal(user, now)) {
+      throw new UnauthorizedException(INVALID_LOGIN_MESSAGE);
+    }
+    await this.audit.log({ actorProfileId: user.profileId, action: 'DEV_QUICK_LOGIN', entityType: 'User', entityId: String(user.id), ipAddress: ip });
+    return this.completeLogin(user, now, ip, userAgent);
   }
 
   async logout(refreshToken: string | undefined, ip?: string): Promise<void> {

@@ -46,6 +46,8 @@ export interface User {
   userTypeId: number;
   profileId: number;
   isActive: boolean;
+  /** Development only: offered on the login page for passwordless sign-in. */
+  devQuickLogin?: boolean;
   allBranches?: boolean;
   branches?: { branchId: number }[];
   userType: { id: number; name: string };
@@ -78,6 +80,8 @@ export interface UpdateUserPayload {
   email?: string;
   userTypeId?: number;
   isActive?: boolean;
+  /** Development only: offered on the login page for passwordless sign-in. */
+  devQuickLogin?: boolean;
   allBranches?: boolean;
   branchIds?: number[];
 }
@@ -370,6 +374,25 @@ export async function login(username: string, password: string) {
   return request<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+  });
+}
+
+/** Development only: the users offered on the login page for passwordless sign-in. Empty outside development. */
+export interface DevLoginOption {
+  username: string;
+  role: string;
+  name: string;
+}
+
+export async function getDevLogins() {
+  return request<DevLoginOption[]>('/auth/dev-logins', { silent: true });
+}
+
+/** Development only: sign in as a user marked "Dev login", without a password. */
+export async function devLoginAs(username: string) {
+  return request<LoginResponse>('/auth/dev-login', {
+    method: 'POST',
+    body: JSON.stringify({ username }),
   });
 }
 

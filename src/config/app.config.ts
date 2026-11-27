@@ -1,9 +1,12 @@
 import { registerAs } from '@nestjs/config';
+import { devQuickLoginAllowed } from '../auth/dev-quick-login';
 
 export default registerAs('app', () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3000', 10),
   appTimezone: process.env.APP_TIMEZONE ?? 'Asia/Dubai',
+  // Development only: passwordless sign-in for users marked "Dev login" (never in production).
+  devQuickLogin: devQuickLoginAllowed(process.env.NODE_ENV, process.env.DEV_QUICK_LOGIN),
   jwt: {
     secret: process.env.JWT_SECRET ?? '',
     accessTtl: process.env.JWT_ACCESS_TTL ?? '15m',

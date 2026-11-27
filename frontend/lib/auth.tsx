@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   login as apiLogin,
+  devLoginAs,
   logout as apiLogout,
   getAccessToken,
   setAccessToken,
@@ -27,6 +28,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   /** Resolves to true when the user must change their password before continuing. */
   login: (username: string, password: string) => Promise<boolean>;
+  /** Development only: sign in as a "Dev login" user. Resolves to true when a password change is needed. */
+  loginAsDev: (username: string) => Promise<boolean>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -71,6 +74,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return mustChangePassword;
   };
 
+  const loginAsDev = async (username: string) => {
+    const response = await devLoginAs(username);
+    const { accessToken, refreshToken, mustChangePassword } = response.data;
+    setAccessToken(accessToken);
+    setRefreshToken(refreshToken);
+    await refreshUser();
+    return mustChangePassword;
+  };
+
   const logout = async () => {
     await apiLogout();
     clearTokens();
@@ -84,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         user,
         login,
+        loginAsDev,
         logout,
         refreshUser,
       }}

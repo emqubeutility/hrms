@@ -158,6 +158,9 @@ model User {
   passwordHash       String?
   /// Forces the change-password prompt (e.g. after an admin reset).
   mustChangePassword Boolean  @default(false)
+  /// Development only: shown on the login page so a developer can sign in as this user without a password.
+  /// Has no effect unless the server runs outside production with DEV_QUICK_LOGIN=true (see dev-quick-login.ts).
+  devQuickLogin      Boolean  @default(false)
   /// NEW: true = may work in every branch; false = only the branches in `branches`.
   /// System Admins are never restricted.
   allBranches        Boolean  @default(true)
